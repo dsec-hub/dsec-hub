@@ -154,6 +154,72 @@ export async function createBoard(_prev: FormState, fd: FormData): Promise<FormS
   return { ok: true, message: "Board created", undo: createToken("board", row?.id) };
 }
 
+/** Read the board's columns from the form: trim blanks, drop duplicates, keep
+ * the submitted order (DOM order == left-to-right column order). */
+function parseColumns(fd: FormData): string[] {
+  const cols = fd.getAll("columns").map((c) => String(c).trim()).filter(Boolean);
+  return [...new Set(cols)];
+}
+
+export async function updateBoard(
+  id: number,
+  _prev: FormState,
+  fd: FormData,
+): Promise<FormState> {
+  const user = await requireWrite("tasks");
+  const name = str(fd, "name") ?? "";
+  if (!name) return { error: "Board name is required." };
+  const columns = parseColumns(fd);
+  const undo = await snapshotForUpdate("board", id);
+  await db
+    .update(taskBoards)
+    .set({
+      name,
+      description: str(fd, "description"),
+      committee: str(fd, "committee"),
+      columns: columns.length ? columns : [...DEFAULT_BOARD_COLUMNS],
+    })
+    .where(eq(taskBoards.id, id));
+  await logMutation(user, "update", "board", id);
+  revalidateTasks();
+  return { ok: true, message: "Board updated", undo };
+}
+
+/**
+ * Move every task on a board back to the Inbox (boardId = null). Called before a
+ * board is archived or deleted so its tasks stay visible somewhere — otherwise
+ * the board/inbox queries would hide them and they'd silently disappear.
+ */
+async function detachBoardTasks(boardId: number) {
+  await db
+    .update(tasks)
+    .set({ boardId: null, updatedAt: new Date().toISOString() })
+    .where(eq(tasks.boardId, boardId));
+}
+
+export async function archiveBoard(id: number): Promise<FormState> {
+  const user = await requireWrite("tasks");
+  await detachBoardTasks(id);
+  await db.update(taskBoards).set({ archived: true }).where(eq(taskBoards.id, id));
+  await logMutation(user, "archive", "board", id);
+  revalidateTasks();
+  return {
+    ok: true,
+    message: "Board archived — its tasks moved to the Inbox",
+    undo: archiveToken("board", id),
+  };
+}
+
+export async function deleteBoard(id: number): Promise<FormState> {
+  const user = await requireWrite("tasks");
+  const undo = await snapshotForDelete("board", id);
+  await detachBoardTasks(id);
+  await db.delete(taskBoards).where(eq(taskBoards.id, id));
+  await logMutation(user, "delete", "board", id);
+  revalidateTasks();
+  return { ok: true, message: "Board deleted — its tasks moved to the Inbox", undo };
+}
+
 /**
  * Move a task to a new status column. Called inline from <MoveControl> with the
  * taskId bound, so it reads only `status` from the submitted FormData and does

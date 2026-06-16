@@ -53,7 +53,14 @@ export default async function TasksPage({
   const showInbox = isInbox || board === null;
   const active = showInbox ? "inbox" : String(board!.id);
   const activeColumns = showInbox ? inbox.columns : columns;
-  const activeBoardId = showInbox ? null : board!.id;
+  const activeBoard = showInbox
+    ? null
+    : {
+        id: board!.id,
+        name: board!.name,
+        description: board!.description,
+        committee: board!.committee,
+      };
 
   const tabs = [
     {
@@ -102,7 +109,7 @@ export default async function TasksPage({
       </div>
 
       <ViewTabs tabs={tabs} active={active} />
-      <TasksView columns={activeColumns} boardId={activeBoardId} canWrite={writable} />
+      <TasksView columns={activeColumns} board={activeBoard} canWrite={writable} />
     </>
   );
 }
