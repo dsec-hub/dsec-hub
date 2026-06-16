@@ -11,7 +11,7 @@ import { requireUser } from "@/lib/dal";
 import { cn, formatDate } from "@/lib/format";
 
 import { revokeApiToken } from "./actions";
-import { CreateTokenForm, McpConnection } from "./api-tokens-client";
+import { CreateTokenForm, McpConnection, QuickStart } from "./api-tokens-client";
 
 export default async function ApiSettingsPage() {
   const user = await requireUser();
@@ -29,18 +29,25 @@ export default async function ApiSettingsPage() {
       />
 
       <div className="max-w-2xl space-y-6">
+        <SectionCard title="Quick start — connect Claude (no token)">
+          <QuickStart url={mcpServerUrl()} />
+        </SectionCard>
+
         {!configured && (
           <div className="rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
-            API tokens are unavailable — the server is missing <code>DSEC_API_URL</code> /{" "}
-            <code>DSEC_API_KEY</code>. Ask an admin to configure them.
+            Personal tokens are unavailable right now (the server is missing <code>DSEC_API_URL</code>{" "}
+            / <code>DSEC_API_KEY</code>). You can still connect by signing in — see Quick start above.
+            Ask an admin if you need a token.
           </div>
         )}
 
-        <SectionCard title="Create a token">
+        <SectionCard title="Create a token (advanced)">
           <div className="space-y-4 px-5 py-4">
             <p className="text-xs text-muted">
-              Tokens carry coarse, global access: a read token can read every module, a write token
-              can write every module via MCP. Only mint tokens for yourself and keep them secret.
+              Most people don’t need this — signing in above is simpler. Create a token only for
+              tools that can’t log in: ChatGPT, Claude Desktop / Code, or scripts. Tokens carry
+              coarse, global access (a read token reads every module, a write token writes every
+              module). Keep them secret and only mint them for yourself.
             </p>
             {allowedOptions.length === 0 ? (
               <p className="text-sm text-muted">
@@ -110,12 +117,8 @@ export default async function ApiSettingsPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Connect a client">
+        <SectionCard title="Token-based setup (other clients)">
           <div className="space-y-3 px-5 py-4">
-            <p className="text-xs text-muted">
-              Add the DSEC MCP server to Claude (Desktop / Code) or any MCP-capable assistant —
-              either by signing in with your DSEC account or with a token as a bearer header.
-            </p>
             <McpConnection url={mcpServerUrl()} allowedScopes={allowed} />
           </div>
         </SectionCard>

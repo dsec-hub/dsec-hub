@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { type ReactNode, useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { CheckboxField, Field, FormError, TextInput } from "@/components/form";
@@ -189,6 +189,64 @@ export function CreateTokenForm({
   );
 }
 
+/** One numbered step in the QuickStart walkthrough. */
+function Step({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent-text">
+        {n}
+      </span>
+
+      <div className="flex-1 space-y-1.5 pt-0.5 text-sm">{children}</div>
+    </li>
+  );
+}
+
+/** Plain-language "connect Claude by signing in" walkthrough — the no-token path.
+ * Written for someone who has never set up an MCP connector before. */
+export function QuickStart({ url }: { url: string }) {
+  return (
+    <div className="space-y-4 px-5 py-4">
+      <p className="text-sm text-muted">
+        The simplest way to use the DSEC workspace inside <span className="font-medium">Claude</span> —
+        no token, nothing to copy except one link. You just sign in with your normal DSEC dashboard
+        account.
+      </p>
+      <ol className="space-y-3">
+        <Step n={1}>
+          <p>Copy the DSEC connection link:</p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded-md bg-background px-3 py-2 font-mono text-xs">
+              {url}
+            </code>
+            <CopyButton value={url} label="Copy" />
+          </div>
+        </Step>
+        <Step n={2}>
+          <p>
+            In Claude, open <span className="font-medium">Settings → Connectors</span> and click{" "}
+            <span className="font-medium">Add custom connector</span>. Paste the link into the{" "}
+            <span className="font-medium">Remote MCP server URL</span> box and click{" "}
+            <span className="font-medium">Add</span>. Leave the “OAuth Client ID / Secret” boxes
+            empty — you don’t need them.
+          </p>
+        </Step>
+        <Step n={3}>
+          <p>
+            Claude opens a DSEC sign-in page. Log in with your dashboard email &amp; password and
+            click <span className="font-medium">Approve</span>. That’s it — Claude can now use DSEC.
+          </p>
+        </Step>
+      </ol>
+      <p className="text-xs text-muted">
+        You’ll only ever see and change what your DSEC role allows, and you can disconnect any time
+        from Claude’s connector settings. Using ChatGPT, Claude Desktop, or a script instead? Those
+        can’t sign in — create a token below.
+      </p>
+    </div>
+  );
+}
+
 /** A copyable MCP connection snippet for chat clients, plus a role-wide guide. */
 export function McpConnection({ url, allowedScopes }: { url: string; allowedScopes: string[] }) {
   const snippet = JSON.stringify(
@@ -202,24 +260,9 @@ export function McpConnection({ url, allowedScopes }: { url: string; allowedScop
   );
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5 rounded-xl border border-accent/40 bg-accent/5 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">Easiest: connect with your DSEC login (no token)</p>
-          <CopyButton value={url} label="Copy URL" />
-        </div>
-        <code className="block break-all rounded-md bg-background px-3 py-2 font-mono text-xs">
-          {url}
-        </code>
-        <p className="text-xs text-muted">
-          In Claude → <span className="font-medium">Settings → Connectors → Add custom connector</span>,
-          paste just this URL and click Add. Claude opens a DSEC sign-in page; log in with your
-          dashboard account and approve. No token to mint or paste — access is bounded by your role
-          and you can revoke it from your account at any time.
-        </p>
-      </div>
-
-      <p className="text-xs text-muted pt-1">
-        Prefer a token (Claude Desktop / Code, ChatGPT, scripts)? Use the connection below.
+      <p className="text-xs text-muted">
+        For Claude, signing in (Quick start at the top) is easiest and needs none of this. Use the
+        token config below for clients that can’t log in — Claude Desktop / Code, ChatGPT, or scripts.
       </p>
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">
