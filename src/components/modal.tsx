@@ -19,11 +19,14 @@ export function Modal({
   onClose,
   title,
   children,
+  size = "default",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  // "wide" gives multi-section flows (the two-stage create modals) more room.
+  size?: "default" | "wide";
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +89,10 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="animate-pop-in relative z-10 my-4 w-full max-w-3xl rounded-xl border border-border bg-background shadow-xl outline-none sm:my-8"
+        className={
+          "animate-pop-in relative z-10 my-4 w-full rounded-xl border border-border bg-background shadow-xl outline-none sm:my-8 " +
+          (size === "wide" ? "max-w-5xl" : "max-w-3xl")
+        }
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
           <h2 className="text-sm font-medium">{title}</h2>
@@ -99,7 +105,7 @@ export function Modal({
             <Icons.close />
           </button>
         </div>
-        <div className="max-h-[80vh] overflow-y-auto px-5 pt-5 pb-3">{children}</div>
+        <div className="max-h-[85vh] overflow-y-auto px-6 pt-5 pb-4">{children}</div>
       </div>
     </div>
   );

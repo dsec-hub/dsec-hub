@@ -12,14 +12,20 @@ import { SPONSOR_STAGES, sponsorStageVariant } from "@/lib/options";
 import {
   getNewLeadCount,
   getPeopleOptions,
+  getSponsorById,
   getSponsors,
   type SponsorWithContact,
 } from "@/lib/queries";
 import { canWrite } from "@/lib/rbac";
+import { getMedia } from "@/lib/workspace-queries";
 
-import { NewSponsorButton } from "./new-sponsor-button";
+import { NewSponsorButton, type CreatedSponsor } from "./new-sponsor-button";
 
-export default async function SponsorsPage() {
+export default async function SponsorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ created?: string }>;
+}) {
   const me = await requireModule("sponsors");
   const writable = canWrite(me.modules, me.writeModules, "sponsors");
   const [sponsors, people, newLeads] = await Promise.all([
@@ -28,6 +34,19 @@ export default async function SponsorsPage() {
     getNewLeadCount(),
   ]);
   const total = sponsors.reduce((acc, s) => acc + Number(s.valueAud ?? 0), 0);
+
+  // After the create modal inserts a sponsor it sets ?created=ID; we load that
+  // sponsor's logo here so the modal's stage-2 logo card shows live data (the
+  // MediaManager action revalidates /sponsors, re-running this).
+  const createdId = writable ? Number((await searchParams).created) : NaN;
+  let created: CreatedSponsor | null = null;
+  if (writable && Number.isFinite(createdId)) {
+    const sponsor = await getSponsorById(createdId);
+    if (sponsor) {
+      const media = await getMedia("sponsor", createdId);
+      created = { id: createdId, name: sponsor.organisation, media };
+    }
+  }
 
   const byStage = new Map<string, SponsorWithContact[]>();
   for (const s of sponsors) {
@@ -45,7 +64,7 @@ export default async function SponsorsPage() {
         title="Sponsors"
         description={`Pipeline · ${formatAUD(total)} total value`}
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Sponsors" }]}
-        action={writable ? <NewSponsorButton people={people} /> : undefined}
+        action={writable ? <NewSponsorButton people={people} created={created} /> : undefined}
       />
 
       <div className="mb-4 flex gap-3 border-b border-border pb-4">

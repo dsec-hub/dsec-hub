@@ -46,6 +46,7 @@ export function NewProjectButton({
       <Modal
         open={isOpen}
         onClose={close}
+        size="wide"
         title={showExtras ? `“${created!.name}” — add images` : "New project"}
       >
         {showExtras ? (

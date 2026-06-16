@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { partners } from "@/db/workspace-schema";
 import { requireWrite } from "@/lib/dal";
 import { bool, str } from "@/lib/form-data";
+import { revalidateWebsite } from "@/lib/revalidate-website";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 import { logMutation } from "@/lib/usage";
@@ -22,10 +23,12 @@ function parsePartner(fd: FormData) {
   };
 }
 
-// Internal-only entity, so no website revalidation — just the dashboard routes.
-function revalidatePartners() {
+// Published partners surface on the public site's "clubs & partners" wall
+// (/about), so refresh that feed as well as the dashboard routes.
+async function revalidatePartners() {
   revalidatePath("/partners");
   revalidatePath("/");
+  await revalidateWebsite("partners");
 }
 
 export async function createPartner(_prev: FormState, fd: FormData): Promise<FormState> {
@@ -34,8 +37,8 @@ export async function createPartner(_prev: FormState, fd: FormData): Promise<For
   if (!values.name) return { error: "Name is required." };
   const [row] = await db.insert(partners).values(values).returning({ id: partners.id });
   await logMutation(user, "create", "partner", row?.id);
-  revalidatePartners();
-  return { ok: true, message: "Partner created", undo: createToken("partner", row?.id) };
+  await revalidatePartners();
+  return { ok: true, message: "Partner created", undo: createToken("partner", row?.id), id: row?.id };
 }
 
 export async function updatePartner(
@@ -52,7 +55,7 @@ export async function updatePartner(
     .set({ ...values, updatedAt: new Date().toISOString() })
     .where(eq(partners.id, id));
   await logMutation(user, "update", "partner", id);
-  revalidatePartners();
+  await revalidatePartners();
   return { ok: true, message: "Partner updated", undo };
 }
 
@@ -63,7 +66,7 @@ export async function archivePartner(id: number): Promise<FormState> {
     .set({ archived: true, updatedAt: new Date().toISOString() })
     .where(eq(partners.id, id));
   await logMutation(user, "archive", "partner", id);
-  revalidatePartners();
+  await revalidatePartners();
   return { ok: true, message: "Partner archived", undo: archiveToken("partner", id) };
 }
 
@@ -72,6 +75,6 @@ export async function deletePartner(id: number): Promise<FormState> {
   const undo = await snapshotForDelete("partner", id);
   await db.delete(partners).where(eq(partners.id, id));
   await logMutation(user, "delete", "partner", id);
-  revalidatePartners();
+  await revalidatePartners();
   return { ok: true, message: "Partner deleted", undo };
 }

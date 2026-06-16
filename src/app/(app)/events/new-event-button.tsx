@@ -73,6 +73,7 @@ export function NewEventButton({
       <Modal
         open={isOpen}
         onClose={close}
+        size="wide"
         title={showExtras ? `“${created!.name}” — add images & details` : "New event"}
       >
         {showExtras ? (

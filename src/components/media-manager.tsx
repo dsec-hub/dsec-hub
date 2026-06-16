@@ -49,7 +49,7 @@ const ROLES_BY_ENTITY: Record<EntityType, RoleDef[]> = {
     { value: "logo", label: "Logo", aspect: undefined, hint: "Brand logo — transparent PNG works best; crop freely" },
   ],
   partner: [
-    { value: "logo", label: "Logo", aspect: undefined, hint: "Brand logo — transparent PNG works best; crop freely" },
+    { value: "logo", label: "Logo", aspect: 1, hint: "Brand logo — square 1:1; transparent PNG works best" },
   ],
   speaker: [
     { value: "photo", label: "Photo", aspect: 1, hint: "Headshot — square 1:1" },

@@ -34,7 +34,7 @@ export function SponsorForm({
   action: Action;
   people: { id: number; name: string }[];
   sponsor?: SponsorRow;
-  onSuccess?: () => void;
+  onSuccess?: (result: FormState) => void;
   onCancel?: () => void;
   redirectOnSuccess?: string;
   canWrite?: boolean;
@@ -46,7 +46,7 @@ export function SponsorForm({
 
   useEffect(() => {
     if (!state?.ok) return;
-    if (onSuccess) onSuccess();
+    if (onSuccess) onSuccess(state);
     else if (redirectOnSuccess) router.push(redirectOnSuccess);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);

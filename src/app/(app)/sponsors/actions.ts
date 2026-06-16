@@ -43,7 +43,7 @@ export async function createSponsor(_prev: FormState, fd: FormData): Promise<For
   if (!values.organisation) return { error: "Organisation is required." };
   const [row] = await db.insert(sponsors).values(values).returning({ id: sponsors.id });
   await revalidateSponsors();
-  return { ok: true, message: "Sponsor created", undo: createToken("sponsor", row?.id) };
+  return { ok: true, message: "Sponsor created", undo: createToken("sponsor", row?.id), id: row?.id };
 }
 
 export async function updateSponsor(

@@ -94,7 +94,18 @@ export function GuideActions({
 }
 
 /** The one-and-only reveal of a freshly minted key. */
-function RevealedKey({ rawKey, scopes }: { rawKey: string; scopes: string[] }) {
+function RevealedKey({
+  rawKey,
+  scopes,
+  mcpUrl,
+}: {
+  rawKey: string;
+  scopes: string[];
+  mcpUrl: string;
+}) {
+  // Claude.ai's "Add custom connector" dialog accepts only a URL — no header
+  // field — so the key has to ride in the link. The MCP server reads `?key=`.
+  const connectUrl = `${mcpUrl}?key=${encodeURIComponent(rawKey)}`;
   return (
     <div className="space-y-3 rounded-xl border border-accent/40 bg-accent/5 p-4">
       <div className="flex items-center justify-between gap-3">
@@ -107,6 +118,20 @@ function RevealedKey({ rawKey, scopes }: { rawKey: string; scopes: string[] }) {
       <p className="text-xs text-danger">
         Copy it now — for security it’s shown only once and can’t be retrieved again.
       </p>
+      <div className="space-y-1.5 border-t border-accent/20 pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">Paste-into-Claude link</p>
+          <CopyButton value={connectUrl} label="Copy link" />
+        </div>
+        <code className="block break-all rounded-md bg-background px-3 py-2 font-mono text-xs">
+          {connectUrl}
+        </code>
+        <p className="text-xs text-muted">
+          In Claude → <span className="font-medium">Settings → Connectors → Add custom connector</span>,
+          paste this as the <span className="font-medium">Remote MCP server URL</span>. Your key is
+          baked into the link, so treat the whole URL as a secret.
+        </p>
+      </div>
       <div className="space-y-1.5 border-t border-accent/20 pt-3">
         <p className="text-xs text-muted">
           Hand this guide to Claude, ChatGPT, Codex or Claude Code so it knows how to use the
@@ -122,9 +147,11 @@ function RevealedKey({ rawKey, scopes }: { rawKey: string; scopes: string[] }) {
 export function CreateTokenForm({
   scopes,
   disabled,
+  mcpUrl,
 }: {
   scopes: ScopeOption[];
   disabled?: boolean;
+  mcpUrl: string;
 }) {
   const [state, formAction] = useActionState(createApiToken, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -141,7 +168,7 @@ export function CreateTokenForm({
 
   return (
     <div className="space-y-4">
-      {minted && <RevealedKey rawKey={minted.rawKey} scopes={minted.scopes} />}
+      {minted && <RevealedKey rawKey={minted.rawKey} scopes={minted.scopes} mcpUrl={mcpUrl} />}
       <form ref={formRef} action={formAction} className="space-y-5">
         <FormError>{state && "error" in state ? state.error : undefined}</FormError>
         <Field label="Token name" hint="e.g. “Claude desktop” or “my laptop”.">
@@ -175,6 +202,25 @@ export function McpConnection({ url, allowedScopes }: { url: string; allowedScop
   );
   return (
     <div className="space-y-3">
+      <div className="space-y-1.5 rounded-xl border border-accent/40 bg-accent/5 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">Easiest: connect with your DSEC login (no token)</p>
+          <CopyButton value={url} label="Copy URL" />
+        </div>
+        <code className="block break-all rounded-md bg-background px-3 py-2 font-mono text-xs">
+          {url}
+        </code>
+        <p className="text-xs text-muted">
+          In Claude → <span className="font-medium">Settings → Connectors → Add custom connector</span>,
+          paste just this URL and click Add. Claude opens a DSEC sign-in page; log in with your
+          dashboard account and approve. No token to mint or paste — access is bounded by your role
+          and you can revoke it from your account at any time.
+        </p>
+      </div>
+
+      <p className="text-xs text-muted pt-1">
+        Prefer a token (Claude Desktop / Code, ChatGPT, scripts)? Use the connection below.
+      </p>
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">
           Server URL <code className="font-mono text-xs text-foreground">{url}</code> · transport
@@ -185,6 +231,18 @@ export function McpConnection({ url, allowedScopes }: { url: string; allowedScop
       <pre className="overflow-x-auto rounded-md bg-background px-3 py-2 font-mono text-xs leading-relaxed">
         {snippet}
       </pre>
+      <div className="space-y-1.5 border-t border-border pt-3">
+        <p className="text-xs text-muted">
+          Using Claude.ai’s <span className="font-medium">Add custom connector</span> dialog (no
+          header field)? Skip the config above and paste the URL with your key on the end:
+        </p>
+        <code className="block break-all rounded-md bg-background px-3 py-2 font-mono text-xs">
+          {url}?key=dsec_live_YOUR_KEY
+        </code>
+        <p className="text-xs text-muted/70">
+          The exact link with your key baked in is shown once, right after you create a token above.
+        </p>
+      </div>
       {allowedScopes.length > 0 && (
         <div className="space-y-1.5 border-t border-border pt-3">
           <p className="text-xs text-muted">

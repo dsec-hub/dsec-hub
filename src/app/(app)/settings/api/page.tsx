@@ -24,7 +24,7 @@ export default async function ApiSettingsPage() {
     <>
       <PageHeader
         title="API & MCP"
-        description="Personal tokens to connect the DSEC workspace to Claude, ChatGPT, or any MCP client."
+        description="Connect the DSEC workspace to Claude, ChatGPT, or any MCP client — sign in with your DSEC account (OAuth), or mint a personal token."
         breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "API & MCP" }]}
       />
 
@@ -47,7 +47,11 @@ export default async function ApiSettingsPage() {
                 Your role doesn’t permit creating API tokens. Ask an admin if you need one.
               </p>
             ) : (
-              <CreateTokenForm scopes={allowedOptions} disabled={!configured} />
+              <CreateTokenForm
+                scopes={allowedOptions}
+                disabled={!configured}
+                mcpUrl={mcpServerUrl()}
+              />
             )}
           </div>
         </SectionCard>
@@ -109,8 +113,8 @@ export default async function ApiSettingsPage() {
         <SectionCard title="Connect a client">
           <div className="space-y-3 px-5 py-4">
             <p className="text-xs text-muted">
-              Add the server to Claude (Desktop / Code) or any MCP-capable assistant, with your
-              token as a bearer header.
+              Add the DSEC MCP server to Claude (Desktop / Code) or any MCP-capable assistant —
+              either by signing in with your DSEC account or with a token as a bearer header.
             </p>
             <McpConnection url={mcpServerUrl()} allowedScopes={allowed} />
           </div>

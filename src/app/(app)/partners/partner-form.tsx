@@ -24,7 +24,7 @@ export function PartnerForm({
 }: {
   action: Action;
   partner?: PartnerRow;
-  onSuccess?: () => void;
+  onSuccess?: (result: FormState) => void;
   onCancel?: () => void;
   redirectOnSuccess?: string;
   canWrite?: boolean;
@@ -36,7 +36,7 @@ export function PartnerForm({
 
   useEffect(() => {
     if (!state?.ok) return;
-    if (onSuccess) onSuccess();
+    if (onSuccess) onSuccess(state);
     else if (redirectOnSuccess) router.push(redirectOnSuccess);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);

@@ -19,6 +19,7 @@ import {
   accentForeground,
   fontByKey,
   normalizeHex,
+  surfacePalette,
   weightByKey,
 } from "@/lib/theme";
 import { updateAppearance } from "./actions";
@@ -169,6 +170,10 @@ export function AppearanceForm({
 
   const previewHex = accent === "default" ? DEFAULT_ACCENT : normalizeHex(accent) ?? DEFAULT_ACCENT;
   const previewBg = background === "default" ? null : normalizeHex(background);
+  // When a background is themed, the card + text recolour to match it. Links use
+  // the palette's readable accent unless the user picked a custom accent.
+  const bgPalette = surfacePalette(previewBg);
+  const accentLinkColor = accent === "default" && bgPalette ? bgPalette.accentText : previewHex;
   const titleVar = fontByKey(titleFont).cssVar;
   const bodyVar = fontByKey(bodyFont).cssVar;
   const titleWeightVal = weightByKey(titleWeight, DEFAULT_TITLE_WEIGHT_KEY).value;
@@ -221,7 +226,10 @@ export function AppearanceForm({
         />
       </Field>
 
-      <Field label="Background" hint="The page floor behind the content. A single colour for both light and dark.">
+      <Field
+        label="Background & cards"
+        hint="Themes the whole surface — the page floor and the cards on top derive from this one colour, with text kept readable. Applies to both light and dark."
+      >
         <ColorField
           value={background}
           onChange={setBackground}
@@ -247,15 +255,26 @@ export function AppearanceForm({
       </div>
 
       {/* Live preview — content floats on a surface card over the chosen page
-          floor, mirroring the real app shell. */}
+          floor, mirroring the real app shell. With a themed background, the card
+          and text recolour to match. */}
       <div
         className="rounded-xl border border-border p-4"
-        style={previewBg ? { background: previewBg } : undefined}
+        style={bgPalette ? { background: bgPalette.background, borderColor: bgPalette.border } : undefined}
       >
-        <div className="mb-1 px-1 text-xs uppercase tracking-wider text-muted">Preview</div>
+        <div
+          className="mb-1 px-1 text-xs uppercase tracking-wider text-muted"
+          style={bgPalette ? { color: bgPalette.muted } : undefined}
+        >
+          Preview
+        </div>
         <div
           className="rounded-lg border border-border bg-surface p-5"
-          style={{ fontFamily: `var(${bodyVar}), ui-sans-serif, system-ui, sans-serif` }}
+          style={{
+            fontFamily: `var(${bodyVar}), ui-sans-serif, system-ui, sans-serif`,
+            ...(bgPalette
+              ? { background: bgPalette.surface, color: bgPalette.foreground, borderColor: bgPalette.border }
+              : {}),
+          }}
         >
           <div
             className="mb-3 text-xl"
@@ -267,7 +286,10 @@ export function AppearanceForm({
           >
             DSEC Exec Dashboard
           </div>
-          <p className="mb-4 text-sm text-muted" style={{ fontWeight: bodyWeightVal }}>
+          <p
+            className="mb-4 text-sm text-muted"
+            style={{ fontWeight: bodyWeightVal, ...(bgPalette ? { color: bgPalette.muted } : {}) }}
+          >
             The quick brown fox jumps over the lazy dog — 0123456789.
           </p>
           <div className="flex items-center gap-3">
@@ -277,7 +299,7 @@ export function AppearanceForm({
             >
               Primary action
             </span>
-            <span className="text-sm font-medium" style={{ color: previewHex }}>
+            <span className="text-sm font-medium" style={{ color: accentLinkColor }}>
               Accent link
             </span>
           </div>

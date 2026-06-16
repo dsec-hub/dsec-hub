@@ -133,9 +133,8 @@ export function normalizeFontKey(
   return FONT_OPTIONS.some((f) => f.key === key) ? key : null;
 }
 
-/** Readable foreground (near-black vs white) for text on the given accent,
- * using WCAG relative luminance. */
-export function accentForeground(hex: string): string {
+/** WCAG relative luminance (0–1) of a `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
   const h = normalizeHex(hex) ?? DEFAULT_ACCENT;
   const channel = (c: number) => {
     const s = c / 255;
@@ -144,8 +143,53 @@ export function accentForeground(hex: string): string {
   const r = channel(parseInt(h.slice(1, 3), 16));
   const g = channel(parseInt(h.slice(3, 5), 16));
   const b = channel(parseInt(h.slice(5, 7), 16));
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.45 ? "#1a0a10" : "#ffffff";
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Readable foreground (near-black vs white) for text on the given accent,
+ * using WCAG relative luminance. */
+export function accentForeground(hex: string): string {
+  return relativeLuminance(hex) > 0.45 ? "#1a0a10" : "#ffffff";
+}
+
+// Brand text inks, reused when a themed background drives the foreground.
+const INK_DARK = "#0a0a0c"; // near-black ink for light surfaces
+const INK_LIGHT = "#fcfdff"; // off-white ink for dark surfaces
+
+export type SurfacePalette = {
+  background: string;
+  surface: string;
+  elevated: string;
+  foreground: string;
+  muted: string;
+  border: string;
+  accentText: string;
+  onDark: boolean;
+};
+
+/**
+ * Derive a full, readable surface palette from a single chosen page colour.
+ * The picked colour is the page floor (`--background`); the cards (`--surface`)
+ * sit a touch lighter on top, `--elevated` (hover/active fills) leans toward the
+ * text ink, and foreground/muted/border flip to stay legible on whatever was
+ * chosen. So one Background choice themes the floor AND the cards coherently, in
+ * both light and dark. Returns null for an empty/invalid value (brand default).
+ */
+export function surfacePalette(input: string | null | undefined): SurfacePalette | null {
+  const bg = normalizeHex(input);
+  if (!bg) return null;
+  const onDark = relativeLuminance(bg) <= 0.45;
+  const ink = onDark ? INK_LIGHT : INK_DARK;
+  return {
+    background: bg,
+    surface: `color-mix(in srgb, ${bg}, #ffffff 7%)`,
+    elevated: `color-mix(in srgb, ${bg}, ${ink} 9%)`,
+    foreground: ink,
+    muted: `color-mix(in srgb, ${ink} 58%, ${bg})`,
+    border: onDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+    accentText: onDark ? "#ff5c8a" : "#c2185b",
+    onDark,
+  };
 }
 
 export type ThemeOverrides = {
@@ -193,9 +237,22 @@ export function buildThemeCss({
     );
   }
 
-  const background = normalizeHex(themeBackground);
-  if (background) {
-    decls.push(`--background:${background}`);
+  // A chosen background themes the whole surface stack — the page floor, the
+  // cards on top (`--surface`) and raised fills (`--elevated`) all derive from
+  // it, with the text ink flipped to stay readable on the result.
+  const palette = surfacePalette(themeBackground);
+  if (palette) {
+    decls.push(
+      `--background:${palette.background}`,
+      `--surface:${palette.surface}`,
+      `--elevated:${palette.elevated}`,
+      `--foreground:${palette.foreground}`,
+      `--muted:${palette.muted}`,
+      `--border:${palette.border}`,
+    );
+    // Keep accent links/badges legible on the themed surface when the user kept
+    // the brand accent (a custom accent already sets its own --accent-text).
+    if (!accent) decls.push(`--accent-text:${palette.accentText}`);
   }
 
   const titleKey = normalizeFontKey(themeFontTitle, DEFAULT_TITLE_FONT_KEY);
