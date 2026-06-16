@@ -97,10 +97,12 @@ function toggleGroupStore(label: string) {
 export function AppShell({
   groups,
   userName,
+  userPhotoUrl,
   children,
 }: {
   groups: NavGroup[];
   userName: string;
+  userPhotoUrl?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -174,9 +176,7 @@ export function AppShell({
             )}
             title={collapsed ? userName : undefined}
           >
-            <div className="grid size-7 shrink-0 place-items-center rounded-full bg-elevated text-xs text-muted">
-              {initials(userName)}
-            </div>
+            <Avatar name={userName} photoUrl={userPhotoUrl} className="shrink-0" />
             {!collapsed && <div className="min-w-0 flex-1 truncate text-sm">{userName}</div>}
             {!collapsed && <ThemeToggle />}
           </div>
@@ -233,9 +233,7 @@ export function AppShell({
             />
             <div className="mt-2 border-t border-border pt-2">
               <div className="flex items-center gap-2.5 px-2 py-1.5">
-                <div className="grid size-7 place-items-center rounded-full bg-elevated text-xs text-muted">
-                  {initials(userName)}
-                </div>
+                <Avatar name={userName} photoUrl={userPhotoUrl} />
                 <div className="min-w-0 flex-1 truncate text-sm">{userName}</div>
               </div>
               <SettingsLink pathname={pathname} collapsed={false} onNavigate={closeMobile} />
@@ -252,6 +250,43 @@ export function AppShell({
           <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6">{children}</div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// Sidebar avatar: shows the member's uploaded profile photo when present,
+// otherwise their initials. The photo is a Supabase-hosted WebP, already sized
+// and optimized upstream, so a plain <img> (no next/image remote config) is the
+// right call here. If it ever fails to load we quietly fall back to initials.
+function Avatar({
+  name,
+  photoUrl,
+  className,
+}: {
+  name: string;
+  photoUrl?: string | null;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showPhoto = !!photoUrl && !failed;
+  return (
+    <div
+      className={cn(
+        "grid size-7 place-items-center overflow-hidden rounded-full bg-elevated text-xs text-muted",
+        className,
+      )}
+    >
+      {showPhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoUrl}
+          alt={name}
+          className="size-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initials(name)
+      )}
     </div>
   );
 }

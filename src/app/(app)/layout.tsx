@@ -7,6 +7,7 @@ import { canAccess } from "@/lib/rbac";
 import { canSeeProjects } from "@/lib/scope";
 import { buildThemeCss } from "@/lib/theme";
 import { logAccess } from "@/lib/usage";
+import { getMedia } from "@/lib/workspace-queries";
 
 // Sidebar is organised into labelled groups. Items without a `module` are
 // always available; the rest are gated per module. A group with no visible
@@ -78,6 +79,13 @@ export default async function AppLayout({
   after(() => logAccess({ id: user.id, email: user.email }));
 
   const name = user.name ?? user.email;
+  // Profile photo for the sidebar avatar: a member's headshot is stored as a
+  // person-entity media asset (role "photo"). Only costs a query for users who
+  // have a linked person record; falls back to initials in the shell otherwise.
+  const photoUrl = user.personId
+    ? ((await getMedia("person", user.personId)).find((m) => m.role === "photo")
+        ?.webpUrl ?? null)
+    : null;
   // Object-level access: a project lead without the Projects module still gets a
   // Projects nav entry (showing only their led projects). Only costs a query for
   // users who lack the module. See lib/scope.ts.
@@ -109,7 +117,7 @@ export default async function AppLayout({
   return (
     <>
       {themeCss ? <style>{themeCss}</style> : null}
-      <AppShell groups={groups} userName={name}>
+      <AppShell groups={groups} userName={name} userPhotoUrl={photoUrl}>
         {children}
       </AppShell>
     </>
