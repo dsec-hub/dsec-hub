@@ -117,7 +117,12 @@ export default async function AppLayout({
   return (
     <>
       {themeCss ? <style>{themeCss}</style> : null}
-      <AppShell groups={groups} userName={name} userPhotoUrl={photoUrl}>
+      <AppShell
+        groups={groups}
+        userName={name}
+        userPhotoUrl={photoUrl}
+        previewRoleName={user.previewRoleName}
+      >
         {children}
       </AppShell>
     </>

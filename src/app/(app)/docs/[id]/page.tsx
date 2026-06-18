@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Markdown } from "@/components/markdown";
 import { Badge, EmptyState, PageHeader, SectionCard, buttonSecondary } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
 import { formatDate } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import { docStatusVariant } from "@/lib/workspace-options";
@@ -19,7 +20,10 @@ export default async function DocDetailPage({
   const { id } = await params;
   const did = Number(id);
   if (Number.isNaN(did)) notFound();
-  const [doc, people] = await Promise.all([getDocumentById(did), getPersonOptions()]);
+  const [doc, people] = await Promise.all([
+    getDocumentById(did, committeeScopeOf(me)),
+    getPersonOptions(),
+  ]);
   if (!doc) notFound();
   const assignee = people.find((p) => p.id === doc.assigneeId)?.name;
 

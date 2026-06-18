@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import { committee } from "@/db/schema";
 import {
   attachments,
   documents,
@@ -28,8 +29,20 @@ import {
 } from "@/db/workspace-schema";
 import { todayISO } from "@/lib/format";
 import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
+import type { CommitteeScope } from "@/lib/scope";
 
 const num = (v: unknown): number => Number(v ?? 0) || 0;
+
+/** WHERE condition restricting a committee-scoped column (meeting/document) to
+ * what the viewer may see: "all" → no restriction; otherwise own committee +
+ * club-wide (null). Returns undefined when no restriction applies. */
+function committeeCond(
+  column: typeof meetings.committee | typeof documents.committee,
+  scope: CommitteeScope,
+) {
+  if (scope.all) return undefined;
+  return scope.committee ? or(isNull(column), eq(column, scope.committee)) : isNull(column);
+}
 
 // ===========================================================================
 // Members
@@ -278,6 +291,85 @@ export async function getTasksDueSoon(days = 14, limit = 12) {
     .limit(limit);
 }
 
+/** Open tasks assigned to a specific person, soonest-due first (My Work). */
+export async function getMyOpenTasks(assigneeId: number, limit = 14) {
+  return db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      priority: tasks.priority,
+      dueDate: tasks.dueDate,
+      committee: tasks.committee,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.archived, false), eq(tasks.assigneeId, assigneeId), isNull(tasks.completedAt)))
+    .orderBy(sql`${tasks.dueDate} is null`, asc(tasks.dueDate), asc(tasks.id))
+    .limit(limit);
+}
+
+export type CommitteeHealthRow = {
+  name: string;
+  color: string | null;
+  lead: string | null;
+  members: number;
+  open: number;
+  overdue: number;
+};
+
+/** Per-committee health for the leadership dashboard: open/overdue task counts,
+ * lead, and member count. Gate the CALLER on tasks access (see dashboard). */
+export async function getCommitteeHealth(): Promise<CommitteeHealthRow[]> {
+  const today = todayISO();
+  const [taskCounts, memberCounts, committees] = await Promise.all([
+    db
+      .select({
+        committee: tasks.committee,
+        open: sql<number>`count(*) filter (where ${tasks.completedAt} is null)`,
+        overdue: sql<number>`count(*) filter (where ${tasks.completedAt} is null and ${tasks.dueDate} is not null and ${tasks.dueDate} < ${today})`,
+      })
+      .from(tasks)
+      .where(eq(tasks.archived, false))
+      .groupBy(tasks.committee),
+    db
+      .select({ committee: people.committee, n: count() })
+      .from(people)
+      .where(eq(people.archived, false))
+      .groupBy(people.committee),
+    db
+      .select({
+        name: committee.name,
+        color: committee.color,
+        leadPersonId: committee.leadPersonId,
+        sortOrder: committee.sortOrder,
+      })
+      .from(committee)
+      .where(eq(committee.isActive, true))
+      .orderBy(asc(committee.sortOrder), asc(committee.name)),
+  ]);
+
+  const tByName = new Map(taskCounts.filter((t) => t.committee).map((t) => [t.committee as string, t]));
+  const mByName = new Map(memberCounts.filter((m) => m.committee).map((m) => [m.committee as string, num(m.n)]));
+
+  const leadIds = committees.map((c) => c.leadPersonId).filter((x): x is number => x != null);
+  const leads = leadIds.length
+    ? await db.select({ id: people.id, name: people.name }).from(people).where(inArray(people.id, leadIds))
+    : [];
+  const leadName = new Map(leads.map((l) => [l.id, l.name]));
+
+  return committees.map((c) => {
+    const t = tByName.get(c.name);
+    return {
+      name: c.name,
+      color: c.color,
+      lead: c.leadPersonId != null ? leadName.get(c.leadPersonId) ?? null : null,
+      members: mByName.get(c.name) ?? 0,
+      open: num(t?.open),
+      overdue: num(t?.overdue),
+    };
+  });
+}
+
 // ===========================================================================
 // Projects
 // ===========================================================================
@@ -489,6 +581,21 @@ export async function getEventPartners(eventId: number) {
   return rows.map((r) => ({ ...r, logo: byId.get(r.partnerId) ?? null }));
 }
 
+/** Every event-to-event link (both directions implied — the relation is
+ * symmetric). Used by the /events "Related" view to cluster connected events.
+ * Edges to archived events are harmless: the clusterer only unions ids that are
+ * in the visible event set, so dangling endpoints are ignored. */
+export async function getAllEventConnections() {
+  return db
+    .select({
+      eventAId: eventConnections.eventAId,
+      eventBId: eventConnections.eventBId,
+      label: eventConnections.label,
+    })
+    .from(eventConnections)
+    .where(eq(eventConnections.archived, false));
+}
+
 /** Other events connected to this one (a symmetric, visual-only relation). The
  * link is order-independent, so the "other" side is whichever id isn't `eventId`.
  * Archived events are dropped so the list never shows a dangling connection. */
@@ -618,20 +725,26 @@ export async function getPartnerEvents(partnerId: number) {
 // Meetings + documents
 // ===========================================================================
 
-export async function getMeetings(limit = 50) {
+export async function getMeetings(scope: CommitteeScope, limit = 50) {
+  const conds = [eq(meetings.archived, false)];
+  const cc = committeeCond(meetings.committee, scope);
+  if (cc) conds.push(cc);
   return db
     .select()
     .from(meetings)
-    .where(eq(meetings.archived, false))
+    .where(and(...conds))
     .orderBy(desc(meetings.meetingDate))
     .limit(limit);
 }
 
-export async function getOpenActionItems(limit = 10) {
+export async function getOpenActionItems(scope: CommitteeScope, limit = 10) {
+  const conds = [eq(meetings.archived, false), sql`${meetings.actionItems} is not null`];
+  const cc = committeeCond(meetings.committee, scope);
+  if (cc) conds.push(cc);
   const recent = await db
     .select({ id: meetings.id, title: meetings.title, actionItems: meetings.actionItems, meetingDate: meetings.meetingDate })
     .from(meetings)
-    .where(and(eq(meetings.archived, false), sql`${meetings.actionItems} is not null`))
+    .where(and(...conds))
     .orderBy(desc(meetings.meetingDate))
     .limit(20);
   const items: { text: string; owner?: string | null; due?: string | null; meeting: string }[] = [];
@@ -643,12 +756,15 @@ export async function getOpenActionItems(limit = 10) {
   return items.slice(0, limit);
 }
 
-export async function getDocuments(opts: { type?: string } = {}) {
+export async function getDocuments(scope: CommitteeScope, opts: { type?: string } = {}) {
   const conds = [eq(documents.archived, false)];
   if (opts.type) conds.push(eq(documents.type, opts.type));
+  const cc = committeeCond(documents.committee, scope);
+  if (cc) conds.push(cc);
   return db
     .select({
       id: documents.id, title: documents.title, type: documents.type, status: documents.status,
+      committee: documents.committee,
       assigneeId: documents.assigneeId, updatedAt: documents.updatedAt, assigneeName: people.name,
     })
     .from(documents)
@@ -833,12 +949,18 @@ export async function getBoardById(id: number) {
   const [row] = await db.select().from(taskBoards).where(eq(taskBoards.id, id)).limit(1);
   return row ?? null;
 }
-export async function getMeetingById(id: number) {
-  const [row] = await db.select().from(meetings).where(eq(meetings.id, id)).limit(1);
-  return row ?? null;
+export async function getMeetingById(id: number, scope: CommitteeScope) {
+  const conds = [eq(meetings.id, id)];
+  const cc = committeeCond(meetings.committee, scope);
+  if (cc) conds.push(cc);
+  const [row] = await db.select().from(meetings).where(and(...conds)).limit(1);
+  return row ?? null; // out-of-scope meetings read as not-found
 }
-export async function getDocumentById(id: number) {
-  const [row] = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+export async function getDocumentById(id: number, scope: CommitteeScope) {
+  const conds = [eq(documents.id, id)];
+  const cc = committeeCond(documents.committee, scope);
+  if (cc) conds.push(cc);
+  const [row] = await db.select().from(documents).where(and(...conds)).limit(1);
   return row ?? null;
 }
 
@@ -880,7 +1002,10 @@ export async function getBoardOptions(): Promise<Option[]> {
   return db.select({ id: taskBoards.id, name: taskBoards.name }).from(taskBoards)
     .where(eq(taskBoards.archived, false)).orderBy(asc(taskBoards.name));
 }
-export async function getMeetingOptions(): Promise<Option[]> {
+export async function getMeetingOptions(scope: CommitteeScope): Promise<Option[]> {
+  const conds = [eq(meetings.archived, false)];
+  const cc = committeeCond(meetings.committee, scope);
+  if (cc) conds.push(cc);
   return db.select({ id: meetings.id, name: meetings.title }).from(meetings)
-    .where(eq(meetings.archived, false)).orderBy(desc(meetings.meetingDate));
+    .where(and(...conds)).orderBy(desc(meetings.meetingDate));
 }

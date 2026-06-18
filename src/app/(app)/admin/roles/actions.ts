@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { appRole, appUser } from "@/db/schema";
+import { appRole, appUser, type ViewConfig } from "@/db/schema";
 import { requireAdmin } from "@/lib/dal";
 import { str } from "@/lib/form-data";
-import { levelsToArrays, MODULE_KEYS, type AccessLevel } from "@/lib/rbac";
+import { levelsToArrays, MODULE_KEYS, isValidLandingPath, type AccessLevel } from "@/lib/rbac";
+import { CANONICAL_SECTIONS } from "@/lib/dashboard-config";
+import { isBuiltInViewKey } from "@/lib/task-view-types";
 import { createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 
@@ -26,6 +28,24 @@ function parseRole(fd: FormData) {
     modules,
     writeModules,
   };
+}
+
+/**
+ * Parse the Focus layer (view_config) from the form. `modules` is the role's
+ * FINAL read set — the landing path is validated against it so a role can never
+ * be pointed at a module it lacks (falls back to /dashboard). Section toggles
+ * for inaccessible modules submit nothing → stored false. Never widens access.
+ */
+function parseViewConfig(fd: FormData, modules: string[]): ViewConfig {
+  const sections: Record<string, boolean> = {};
+  for (const s of CANONICAL_SECTIONS) {
+    sections[s.id] = str(fd, `viewConfig:section:${s.id}`) === "on";
+  }
+  const rawLanding = str(fd, "viewConfig:landing") ?? "/dashboard";
+  const landingPath = isValidLandingPath(modules, rawLanding) ? rawLanding : "/dashboard";
+  const dv = str(fd, "viewConfig:defaultView");
+  const defaultTaskView = isBuiltInViewKey(dv) ? dv : "my-work";
+  return { version: 1, sections, landingPath, defaultTaskView };
 }
 
 async function nameTaken(name: string, exceptId?: number): Promise<boolean> {
@@ -54,6 +74,7 @@ export async function createRole(_prev: FormState, fd: FormData): Promise<FormSt
       description: values.description,
       modules: values.modules,
       writeModules: values.writeModules,
+      viewConfig: parseViewConfig(fd, values.modules),
       isSystem: false,
     })
     .returning({ id: appRole.id });
@@ -77,15 +98,19 @@ export async function updateRole(
   }
 
   // System roles (Admin) keep their name + module set locked to avoid lockout;
-  // only the description is editable.
+  // description AND the Focus layer (view_config) stay editable so an admin can
+  // still tune e.g. the Admin dashboard. The landing path is validated against
+  // the role's FINAL modules.
+  const finalModules = role.isSystem ? role.modules : values.modules;
   const undo = await snapshotForUpdate("role", id);
   await db
     .update(appRole)
     .set({
       name: role.isSystem ? role.name : values.name,
       description: values.description,
-      modules: role.isSystem ? role.modules : values.modules,
+      modules: finalModules,
       writeModules: role.isSystem ? role.writeModules : values.writeModules,
+      viewConfig: parseViewConfig(fd, finalModules),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(appRole.id, id));

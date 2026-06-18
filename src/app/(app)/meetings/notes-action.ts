@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
+import { eq } from "drizzle-orm";
+
+import { db } from "@/db";
+import { meetings } from "@/db/workspace-schema";
 import { apiEnv } from "@/lib/api-env";
 import { requireWrite } from "@/lib/dal";
+import { canWriteCommittee } from "@/lib/rbac";
 import { logMutation } from "@/lib/usage";
 
 export type NotesState = { error?: string; ok?: string } | undefined;
@@ -15,6 +20,16 @@ export type NotesState = { error?: string; ok?: string } | undefined;
  */
 export async function generateMeetingNotes(meetingId: number): Promise<NotesState> {
   const user = await requireWrite("meetings");
+  // Scoped-owner guard: only generate notes for a meeting you may write.
+  const [m] = await db
+    .select({ committee: meetings.committee })
+    .from(meetings)
+    .where(eq(meetings.id, meetingId))
+    .limit(1);
+  if (!m) return { error: "Meeting not found." };
+  if (!canWriteCommittee(user.viewConfig.committeeScope, user.userCommittee, m.committee)) {
+    return { error: "You can only generate notes for your own committee's meetings." };
+  }
   const env = apiEnv();
   if (!env) {
     return {

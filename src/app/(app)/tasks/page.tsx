@@ -1,13 +1,16 @@
-import { StatTile, ViewTabs } from "@/components/dashboard";
+import { StatTile } from "@/components/dashboard";
 import { PageHeader } from "@/components/ui";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { requireModule } from "@/lib/dal";
+import { todayISO } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
+import { isBuiltInViewKey } from "@/lib/task-view-types";
+import { getSavedViews, getTasksForViews } from "@/lib/task-view-queries";
+import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
 import {
   getBoardOptions,
-  getBoardWithTasks,
+  getBoards,
   getEventOptions,
-  getInboxColumns,
   getPersonOptions,
   getProjectOptions,
   getTaskStats,
@@ -15,89 +18,69 @@ import {
 
 import { NewBoardButton } from "./new-board-button";
 import { NewTaskButton } from "./new-task-button";
-import { TasksView } from "./tasks-view";
+import { TasksWorkspace } from "./tasks-workspace";
 
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ board?: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const me = await requireModule("tasks");
-  const writable = canWrite(me.modules, me.writeModules, "tasks");
-  const { board: rawBoard } = await searchParams;
-  const isInbox = rawBoard === "inbox";
-  const parsed = rawBoard ? Number(rawBoard) : undefined;
-  const boardId = parsed && !Number.isNaN(parsed) ? parsed : undefined;
+  const fullWrite = canWrite(me.modules, me.writeModules, "tasks");
+  const { view: rawView } = await searchParams;
 
-  const [
-    { board, boards, columns },
-    inbox,
-    stats,
-    boardOptions,
-    people,
-    events,
-    projects,
-    committees,
-  ] = await Promise.all([
-    getBoardWithTasks(boardId),
-    getInboxColumns(),
-    getTaskStats(),
-    getBoardOptions(),
-    getPersonOptions(),
-    getEventOptions(),
-    getProjectOptions(),
-    getCommitteeOptions(),
-  ]);
+  const [tasks, savedViews, stats, committeeOpts, people, events, projects, boardOptions, boards] =
+    await Promise.all([
+      getTasksForViews(),
+      getSavedViews(me.id),
+      getTaskStats(),
+      getCommitteeOptions(),
+      getPersonOptions(),
+      getEventOptions(),
+      getProjectOptions(),
+      getBoardOptions(),
+      getBoards(),
+    ]);
 
-  // Inbox is selected explicitly, or implicitly when there are no boards at all.
-  const showInbox = isInbox || board === null;
-  const active = showInbox ? "inbox" : String(board!.id);
-  const activeColumns = showInbox ? inbox.columns : columns;
-  const activeBoard = showInbox
-    ? null
-    : {
-        id: board!.id,
-        name: board!.name,
-        description: board!.description,
-        committee: board!.committee,
-      };
+  // Status vocabulary = the default columns plus any custom column any board uses.
+  const statusSet = new Set<string>(DEFAULT_BOARD_COLUMNS);
+  for (const b of boards) for (const c of (b.columns ?? []) as string[]) statusSet.add(c);
+  const statuses = [...statusSet];
 
-  const tabs = [
-    {
-      key: "inbox",
-      label: inbox.count ? `Inbox · ${inbox.count}` : "Inbox",
-      href: "/tasks?board=inbox",
-    },
-    ...boards.map((b) => ({
-      key: String(b.id),
-      label: b.name,
-      href: `/tasks?board=${b.id}`,
-    })),
-  ];
+  const committees = committeeOpts.map((c) => c.name);
+
+  // Initial view: explicit ?view=, else the role's default, else My Work.
+  const roleDefault = me.viewConfig?.defaultTaskView ?? "";
+  const initialViewKey =
+    rawView && (rawView.startsWith("saved:") || isBuiltInViewKey(rawView))
+      ? rawView
+      : isBuiltInViewKey(roleDefault)
+        ? roleDefault
+        : "my-work";
 
   return (
     <>
       <PageHeader
         title="Tasks"
-        description="Trello-style boards across the committee. Tasks with no board land in the Inbox."
+        description="One pool of tasks, sliced by view — switch lenses, filter, or save your own."
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Tasks" }]}
         action={
-          writable ? (
+          fullWrite ? (
             <div className="flex items-center gap-2">
-              <NewBoardButton committees={committees} />
+              <NewBoardButton committees={committeeOpts} />
               <NewTaskButton
                 boards={boardOptions}
                 people={people}
                 events={events}
                 projects={projects}
-                committees={committees}
+                committees={committeeOpts}
               />
             </div>
           ) : undefined
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-3 gap-4">
         <StatTile label="Open" value={stats.open} accent />
         <StatTile
           label="Overdue"
@@ -105,11 +88,18 @@ export default async function TasksPage({
           tone={stats.overdue > 0 ? "danger" : "success"}
         />
         <StatTile label="Completed" value={stats.done} sub={`${stats.total} total`} />
-        <StatTile label="Boards" value={boards.length} />
       </div>
 
-      <ViewTabs tabs={tabs} active={active} />
-      <TasksView columns={activeColumns} board={activeBoard} canWrite={writable} />
+      <TasksWorkspace
+        tasks={tasks}
+        savedViews={savedViews}
+        personId={me.personId}
+        fullWrite={fullWrite}
+        today={todayISO()}
+        statuses={statuses}
+        options={{ committees, people, events, statuses, boards: boardOptions }}
+        initialViewKey={initialViewKey}
+      />
     </>
   );
 }

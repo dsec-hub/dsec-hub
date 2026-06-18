@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Icons, type IconName } from "@/components/icons";
+import { PreviewBanner } from "@/components/preview-banner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn, initials } from "@/lib/format";
 
@@ -98,11 +99,13 @@ export function AppShell({
   groups,
   userName,
   userPhotoUrl,
+  previewRoleName,
   children,
 }: {
   groups: NavGroup[];
   userName: string;
   userPhotoUrl?: string | null;
+  previewRoleName?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -246,6 +249,7 @@ export function AppShell({
           floor (md+), replacing the old hard divider between nav and content.
           On mobile it stays edge-to-edge under the top bar. */}
       <main className="min-w-0 flex-1 md:py-2 md:pr-2">
+        {previewRoleName && <PreviewBanner roleName={previewRoleName} />}
         <div className="md:h-full md:rounded-2xl md:bg-surface md:shadow-sm">
           <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6">{children}</div>
         </div>

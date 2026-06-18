@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { Badge, EmptyState, PageHeader, SectionCard, buttonGhost } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import { formatDate } from "@/lib/format";
 import type { BadgeVariant } from "@/lib/options";
 import { canWrite } from "@/lib/rbac";
@@ -28,19 +30,36 @@ function meetingStatusVariant(status: string | null | undefined): BadgeVariant {
 export default async function MeetingsPage() {
   const me = await requireModule("meetings");
   const writable = canWrite(me.modules, me.writeModules, "meetings");
-  const [meetings, events, people] = await Promise.all([
-    getMeetings(50),
+  const scope = committeeScopeOf(me);
+  const [meetings, events, people, committeeOpts] = await Promise.all([
+    getMeetings(scope, 50),
     getEventOptions(),
     getPersonOptions(),
+    getCommitteeOptions(),
   ]);
+  const committees = committeeOpts.map((c) => c.name);
 
   return (
     <>
       <PageHeader
         title="Meetings"
-        description="Minutes from every committee and exec meeting. Drop a raw transcript into the MCP generate_meeting_notes tool to turn it into a clean summary and action items."
+        description={
+          scope.all
+            ? "Minutes from every committee + exec meeting. Team meetings are visible to that team; club-wide notes to everyone."
+            : "Your committee's meeting notes, plus club-wide all-hands. Notes you create are visible to your committee + execs."
+        }
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Meetings" }]}
-        action={writable ? <NewMeetingButton events={events} people={people} /> : undefined}
+        action={
+          writable ? (
+            <NewMeetingButton
+              events={events}
+              people={people}
+              committees={committees}
+              canChooseCommittee={scope.all}
+              lockedCommittee={me.userCommittee}
+            />
+          ) : undefined
+        }
       />
 
       <SectionCard title={`${meetings.length} meeting${meetings.length === 1 ? "" : "s"}`}>
@@ -55,8 +74,13 @@ export default async function MeetingsPage() {
                     <Link href={`/meetings/${m.id}`} className="text-sm font-medium hover:text-accent-text">
                       {m.title}
                     </Link>
-                    <div className="mt-0.5 text-xs text-muted">
-                      {m.type ?? "—"} · {formatDate(m.meetingDate)} · {m.location ?? "—"}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <Badge variant={m.committee ? "accent" : "neutral"}>
+                        {m.committee ?? "Club-wide"}
+                      </Badge>
+                      <span>
+                        {m.type ?? "—"} · {formatDate(m.meetingDate)} · {m.location ?? "—"}
+                      </span>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">

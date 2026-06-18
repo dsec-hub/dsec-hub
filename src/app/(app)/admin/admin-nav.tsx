@@ -11,6 +11,7 @@ const TABS = [
   { href: "/admin/roles", label: "Roles" },
   { href: "/admin/invites", label: "Invites" },
   { href: "/admin/committees", label: "Committees" },
+  { href: "/admin/preview", label: "Preview as role" },
   { href: "/admin/links", label: "Public links" },
   { href: "/admin/usage", label: "Usage" },
 ];

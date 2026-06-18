@@ -8,6 +8,7 @@ import { formatAUD, formatDate } from "@/lib/format";
 import { sponsorStageVariant } from "@/lib/options";
 import { getPeopleOptions, getSponsorById } from "@/lib/queries";
 import { canWrite } from "@/lib/rbac";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import {
   getSponsorAttachments,
   getSponsorContacts,
@@ -29,13 +30,14 @@ export default async function SponsorDetailPage({
   const sponsorId = Number(id);
   if (Number.isNaN(sponsorId)) notFound();
 
-  const [sponsor, people, contacts, tasks, documents, linkedEvents] = await Promise.all([
+  const [sponsor, people, contacts, tasks, documents, linkedEvents, committees] = await Promise.all([
     getSponsorById(sponsorId),
     getPeopleOptions(),
     getSponsorContacts(sponsorId),
     getSponsorTasks(sponsorId),
     getSponsorAttachments(sponsorId),
     getSponsorEvents(sponsorId),
+    getCommitteeOptions(),
   ]);
   if (!sponsor) notFound();
 
@@ -101,7 +103,14 @@ export default async function SponsorDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <SponsorContacts sponsorId={sponsorId} contacts={contacts} people={people} canWrite={writable} />
-        <RelatedTasks kind="sponsor" parentId={sponsorId} tasks={tasks} canWrite={writable} />
+        <RelatedTasks
+          kind="sponsor"
+          parentId={sponsorId}
+          tasks={tasks}
+          canWrite={writable}
+          committees={committees.map((c) => c.name)}
+          defaultCommittee="External Affairs"
+        />
         <SectionCard title={`Linked events · ${linkedEvents.length}`}>
           {linkedEvents.length === 0 ? (
             <EmptyState>

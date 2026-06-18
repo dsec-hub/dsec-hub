@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageHeader, buttonGhost } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import { cn } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import { getEventOptions, getMeetingById, getPersonOptions } from "@/lib/workspace-queries";
@@ -22,10 +24,12 @@ export default async function EditMeetingPage({
   const meetingId = Number(id);
   if (Number.isNaN(meetingId)) notFound();
 
-  const [meeting, events, people] = await Promise.all([
-    getMeetingById(meetingId),
+  const scope = committeeScopeOf(me);
+  const [meeting, events, people, committeeOpts] = await Promise.all([
+    getMeetingById(meetingId, scope),
     getEventOptions(),
     getPersonOptions(),
+    getCommitteeOptions(),
   ]);
   if (!meeting) notFound();
 
@@ -73,6 +77,9 @@ export default async function EditMeetingPage({
         meeting={meeting}
         events={events}
         people={people}
+        committees={committeeOpts.map((c) => c.name)}
+        canChooseCommittee={scope.all}
+        lockedCommittee={me.userCommittee}
         canWrite={writable}
       />
     </>

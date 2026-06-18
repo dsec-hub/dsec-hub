@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PageHeader, buttonGhost } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import { cn } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import {
@@ -27,12 +29,14 @@ export default async function EditDocumentPage({
   const documentId = Number(id);
   if (Number.isNaN(documentId)) notFound();
 
-  const [document, people, events, projects, meetings] = await Promise.all([
-    getDocumentById(documentId),
+  const scope = committeeScopeOf(me);
+  const [document, people, events, projects, meetings, committeeOpts] = await Promise.all([
+    getDocumentById(documentId, scope),
     getPersonOptions(),
     getEventOptions(),
     getProjectOptions(),
-    getMeetingOptions(),
+    getMeetingOptions(scope),
+    getCommitteeOptions(),
   ]);
   if (!document) notFound();
 
@@ -75,6 +79,9 @@ export default async function EditDocumentPage({
         events={events}
         projects={projects}
         meetings={meetings}
+        committees={committeeOpts.map((c) => c.name)}
+        canChooseCommittee={scope.all}
+        lockedCommittee={me.userCommittee}
         canWrite={writable}
       />
     </>

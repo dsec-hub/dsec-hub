@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Segmented } from "@/components/segmented";
-import { Badge, EmptyState, SectionCard, buttonGhost } from "@/components/ui";
-import { cn, formatDate, formatTime } from "@/lib/format";
-import { dusaVariant, eventStatusVariant } from "@/lib/options";
+import { EmptyState, SectionCard, buttonGhost } from "@/components/ui";
+import { cn } from "@/lib/format";
 import type { EventWithLead } from "@/lib/queries";
 
-type View = "list" | "calendar";
+import { EventRow } from "./grouped-list";
+
 type CalMode = "day" | "week" | "month";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -50,14 +50,7 @@ function addMonths(d: Date, n: number): Date {
   return r;
 }
 
-export function EventsView({
-  events,
-  today,
-}: {
-  events: EventWithLead[];
-  today: string;
-}) {
-  const [view, setView] = useState<View>("list");
+export function EventCalendar({ events, today }: { events: EventWithLead[]; today: string }) {
   const [mode, setMode] = useState<CalMode>("month");
   const [cursor, setCursor] = useState<Date>(() => parseDate(today) ?? new Date());
 
@@ -79,10 +72,7 @@ export function EventsView({
     return map;
   }, [events]);
 
-  const unscheduled = useMemo(
-    () => events.filter((e) => !parseDate(e.startDate)),
-    [events],
-  );
+  const unscheduled = useMemo(() => events.filter((e) => !parseDate(e.startDate)), [events]);
 
   function step(dir: -1 | 1) {
     setCursor((c) =>
@@ -110,50 +100,35 @@ export function EventsView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => step(-1)} className={cn(buttonGhost, "px-2")} aria-label="Previous">
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setCursor(parseDate(today) ?? new Date())}
+            className={cn(buttonGhost, "px-2")}
+          >
+            Today
+          </button>
+          <button type="button" onClick={() => step(1)} className={cn(buttonGhost, "px-2")} aria-label="Next">
+            ›
+          </button>
+        </div>
+        <span className="min-w-40 text-sm font-medium">{periodLabel}</span>
         <Segmented
           options={[
-            { value: "list", label: "List" },
-            { value: "calendar", label: "Calendar" },
+            { value: "day", label: "Day" },
+            { value: "week", label: "Week" },
+            { value: "month", label: "Month" },
           ]}
-          value={view}
-          onChange={(v) => setView(v as View)}
+          value={mode}
+          onChange={(v) => setMode(v as CalMode)}
         />
-
-        {view === "calendar" && (
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={() => step(-1)} className={cn(buttonGhost, "px-2")} aria-label="Previous">
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={() => setCursor(parseDate(today) ?? new Date())}
-                className={cn(buttonGhost, "px-2")}
-              >
-                Today
-              </button>
-              <button type="button" onClick={() => step(1)} className={cn(buttonGhost, "px-2")} aria-label="Next">
-                ›
-              </button>
-            </div>
-            <span className="min-w-40 text-sm font-medium">{periodLabel}</span>
-            <Segmented
-              options={[
-                { value: "day", label: "Day" },
-                { value: "week", label: "Week" },
-                { value: "month", label: "Month" },
-              ]}
-              value={mode}
-              onChange={(v) => setMode(v as CalMode)}
-            />
-          </div>
-        )}
       </div>
 
-      {view === "list" ? (
-        <ListView events={events} />
-      ) : mode === "month" ? (
+      {mode === "month" ? (
         <MonthView cursor={cursor} today={today} byDay={byDay} />
       ) : mode === "week" ? (
         <WeekView cursor={cursor} today={today} byDay={byDay} />
@@ -161,7 +136,7 @@ export function EventsView({
         <DayView cursor={cursor} today={today} byDay={byDay} />
       )}
 
-      {view === "calendar" && unscheduled.length > 0 && (
+      {unscheduled.length > 0 && (
         <SectionCard title={`${unscheduled.length} without a date`}>
           <ul className="divide-y divide-border">
             {unscheduled.map((e) => (
@@ -173,52 +148,6 @@ export function EventsView({
         </SectionCard>
       )}
     </div>
-  );
-}
-
-function ListView({ events }: { events: EventWithLead[] }) {
-  return (
-    <SectionCard title={`${events.length} event${events.length === 1 ? "" : "s"}`}>
-      {events.length === 0 ? (
-        <EmptyState>No events yet — create the first one.</EmptyState>
-      ) : (
-        <ul className="divide-y divide-border">
-          {events.map((e) => (
-            <li key={e.id}>
-              <EventRow e={e} className="px-5 py-3" />
-            </li>
-          ))}
-        </ul>
-      )}
-    </SectionCard>
-  );
-}
-
-function EventRow({ e, className }: { e: EventWithLead; className?: string }) {
-  return (
-    <Link
-      href={`/events/${e.id}`}
-      className={cn(
-        "flex items-center justify-between gap-4 transition-colors hover:bg-elevated/50",
-        className,
-      )}
-    >
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium">{e.name}</div>
-        <div className="mt-0.5 truncate text-xs text-muted">
-          {formatDate(e.startDate)}
-          {e.startTime ? ` · ${formatTime(e.startTime)}` : ""} ·{" "}
-          {e.leadName ?? "no lead"} · {e.committee ?? "—"}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {!e.isPublic && <Badge variant="warning">Draft</Badge>}
-        {e.status !== "Completed" && (
-          <Badge variant={dusaVariant(e.dusaSubmissionStatus)}>{e.dusaSubmissionStatus ?? "—"}</Badge>
-        )}
-        <Badge variant={eventStatusVariant(e.status)}>{e.status ?? "—"}</Badge>
-      </div>
-    </Link>
   );
 }
 

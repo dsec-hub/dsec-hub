@@ -6,6 +6,7 @@ import { Badge, PageHeader, SectionCard, buttonSecondary } from "@/components/ui
 
 import { MeetingActionItems } from "./action-items";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
 import { formatDate } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import { attendeeName, meetingStatusVariant } from "@/lib/workspace-options";
@@ -21,8 +22,8 @@ export default async function MeetingDetailPage({
   const { id } = await params;
   const mid = Number(id);
   if (Number.isNaN(mid)) notFound();
-  const meeting = await getMeetingById(mid);
-  if (!meeting) notFound();
+  const meeting = await getMeetingById(mid, committeeScopeOf(me));
+  if (!meeting) notFound(); // out-of-committee meetings read as not-found
   const actions = meeting.actionItems ?? [];
 
   return (

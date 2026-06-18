@@ -7,6 +7,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appRole, appUser } from "@/db/schema";
 import { requireAdmin } from "@/lib/dal";
+import { canAccess, canWrite, MODULE_KEYS, type AccessLevel } from "@/lib/rbac";
 import { bool, int, str } from "@/lib/form-data";
 import { hashPassword, validatePassword } from "@/lib/password";
 import { snapshotForUpdate } from "@/lib/undo";
@@ -62,11 +63,28 @@ export async function updateUser(
     return { error: "You can't deactivate your own account." };
   }
 
+  // Per-user custom privileges: the form posts the chosen EFFECTIVE level per
+  // operational module; we store only what's ELEVATED above the role baseline
+  // (additive). "admin" is never grantable here (role-only — keeps the lockout
+  // guard valid).
+  const ops = MODULE_KEYS.filter((k) => k !== "admin");
+  const levels = Object.fromEntries(
+    ops.map((k) => [k, (str(fd, `extra:${k}`) ?? "none") as AccessLevel]),
+  ) as Record<string, AccessLevel>;
+  const extraModules = ops.filter(
+    (k) => (levels[k] === "read" || levels[k] === "write") && !canAccess(role.modules, k),
+  );
+  const extraWriteModules = ops.filter(
+    (k) => levels[k] === "write" && !canWrite(role.modules, role.writeModules, k),
+  );
+
   const set: Record<string, unknown> = {
     name: name ?? target.name,
     roleId,
     role: role.name,
     isActive,
+    extraModules,
+    extraWriteModules,
     updatedAt: new Date().toISOString(),
   };
   if (newPassword) {

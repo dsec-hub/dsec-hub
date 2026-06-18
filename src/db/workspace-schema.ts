@@ -142,6 +142,8 @@ export const taskBoards = pgTable("task_board", {
 export const tasks = pgTable("task", {
   id: serial().primaryKey(),
   boardId: integer("board_id"),
+  // Self-referential parent for one-level subtasks (null = top-level card).
+  parentTaskId: integer("parent_task_id"),
   title: varchar({ length: 512 }).notNull(),
   description: text(),
   status: varchar({ length: 64 }).default("Backlog").notNull(),
@@ -164,6 +166,9 @@ export const meetings = pgTable("meeting", {
   id: serial().primaryKey(),
   title: varchar({ length: 512 }).notNull(),
   type: varchar({ length: 64 }),
+  // Owning committee for visibility scoping (null = club-wide / all-hands).
+  // Only that committee + "all"-scope roles (exec/secretary/admin) see it.
+  committee: varchar({ length: 128 }),
   meetingDate: date("meeting_date"),
   location: varchar({ length: 256 }),
   // Either a linked person ({ personId, name }) or a free-text guest ({ name }).
@@ -185,6 +190,9 @@ export const documents = pgTable("document", {
   id: serial().primaryKey(),
   title: varchar({ length: 512 }).notNull(),
   type: varchar({ length: 32 }),
+  // Owning committee for visibility scoping (null = club-wide). Meeting-notes
+  // docs inherit their meeting's committee so they scope identically.
+  committee: varchar({ length: 128 }),
   content: text(),
   contentJson: json("content_json"),
   status: varchar({ length: 32 }),

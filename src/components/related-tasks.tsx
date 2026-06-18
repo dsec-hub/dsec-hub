@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 
-import { TextInput } from "@/components/form";
+import { SelectField, TextInput } from "@/components/form";
 import { Badge, EmptyState, SectionCard, buttonGhost } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { priorityVariant } from "@/lib/workspace-options";
@@ -28,11 +28,17 @@ export function RelatedTasks({
   parentId,
   tasks,
   canWrite,
+  committees,
+  defaultCommittee,
 }: {
   kind: TaskParentKind;
   parentId: number;
   tasks: RelatedTaskRow[];
   canWrite: boolean;
+  /** Committee names for the quick-add picker; omit to hide the picker. */
+  committees?: string[];
+  /** Pre-selected committee (e.g. the event's own committee). */
+  defaultCommittee?: string | null;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -86,9 +92,28 @@ export function RelatedTasks({
             await quickAddRelatedTask(kind, parentId, fd);
             formRef.current?.reset();
           }}
-          className="flex items-center gap-2 border-t border-border px-5 py-3"
+          className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3"
         >
-          <TextInput name="title" placeholder={`Add a task for this ${NOUN[kind]}…`} />
+          <TextInput
+            name="title"
+            placeholder={`Add a task for this ${NOUN[kind]}…`}
+            className="min-w-48 flex-1"
+          />
+          {committees && committees.length > 0 && (
+            <SelectField
+              name="committee"
+              defaultValue={defaultCommittee ?? ""}
+              aria-label="Committee"
+              className="h-9 w-auto min-w-36 py-1 text-sm"
+            >
+              <option value="">No committee</option>
+              {committees.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </SelectField>
+          )}
           <button className={buttonGhost} type="submit">
             Add
           </button>

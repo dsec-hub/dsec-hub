@@ -1,5 +1,7 @@
 import { PageHeader } from "@/components/ui";
 import { requireWrite } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import {
   getEventOptions,
   getMeetingOptions,
@@ -11,13 +13,15 @@ import { createDocument } from "../actions";
 import { DocumentForm } from "../document-form";
 
 export default async function NewDocumentPage() {
-  await requireWrite("documents");
+  const me = await requireWrite("documents");
+  const scope = committeeScopeOf(me);
 
-  const [people, events, projects, meetings] = await Promise.all([
+  const [people, events, projects, meetings, committeeOpts] = await Promise.all([
     getPersonOptions(),
     getEventOptions(),
     getProjectOptions(),
-    getMeetingOptions(),
+    getMeetingOptions(scope),
+    getCommitteeOptions(),
   ]);
 
   return (
@@ -37,6 +41,9 @@ export default async function NewDocumentPage() {
         events={events}
         projects={projects}
         meetings={meetings}
+        committees={committeeOpts.map((c) => c.name)}
+        canChooseCommittee={scope.all}
+        lockedCommittee={me.userCommittee}
       />
     </>
   );

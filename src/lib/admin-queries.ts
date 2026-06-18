@@ -3,7 +3,7 @@ import "server-only";
 import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { appInvite, appRole, appUser, committee } from "@/db/schema";
+import { appInvite, appRole, appUser, committee, type ViewConfig } from "@/db/schema";
 
 export type UserRow = {
   id: number;
@@ -14,6 +14,8 @@ export type UserRow = {
   roleId: number | null;
   roleName: string | null;
   roleModules: string[] | null;
+  extraModules: string[];
+  extraWriteModules: string[];
   createdAt: string;
 };
 
@@ -23,6 +25,7 @@ export type RoleRow = {
   description: string | null;
   modules: string[];
   writeModules: string[];
+  viewConfig: ViewConfig | null;
   isSystem: boolean;
   userCount: number;
 };
@@ -52,6 +55,8 @@ export async function getUsers(): Promise<UserRow[]> {
       roleId: appUser.roleId,
       roleName: appRole.name,
       roleModules: appRole.modules,
+      extraModules: appUser.extraModules,
+      extraWriteModules: appUser.extraWriteModules,
       createdAt: appUser.createdAt,
     })
     .from(appUser)
@@ -70,6 +75,8 @@ export async function getUserById(id: number): Promise<UserRow | undefined> {
       roleId: appUser.roleId,
       roleName: appRole.name,
       roleModules: appRole.modules,
+      extraModules: appUser.extraModules,
+      extraWriteModules: appUser.extraWriteModules,
       createdAt: appUser.createdAt,
     })
     .from(appUser)
@@ -92,6 +99,7 @@ export async function getRoles(): Promise<RoleRow[]> {
       description: appRole.description,
       modules: appRole.modules,
       writeModules: appRole.writeModules,
+      viewConfig: appRole.viewConfig,
       isSystem: appRole.isSystem,
       userCount: roleUserCount,
     })
@@ -107,6 +115,7 @@ export async function getRoleById(id: number): Promise<RoleRow | undefined> {
       description: appRole.description,
       modules: appRole.modules,
       writeModules: appRole.writeModules,
+      viewConfig: appRole.viewConfig,
       isSystem: appRole.isSystem,
       userCount: roleUserCount,
     })

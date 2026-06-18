@@ -23,6 +23,9 @@ export function DocumentForm({
   events,
   projects,
   meetings,
+  committees,
+  canChooseCommittee,
+  lockedCommittee,
   onSuccess,
   onCancel,
   canWrite = true,
@@ -33,6 +36,12 @@ export function DocumentForm({
   events: Option[];
   projects: Option[];
   meetings: Option[];
+  /** Committee names for the visibility picker (only used when canChooseCommittee). */
+  committees: string[];
+  /** "all"-scope users pick any committee/club-wide; "own"-scope users are locked. */
+  canChooseCommittee: boolean;
+  /** The own-scope user's committee — the doc is forced to this. */
+  lockedCommittee: string | null;
   onSuccess?: () => void;
   onCancel?: () => void;
   canWrite?: boolean;
@@ -73,6 +82,23 @@ export function DocumentForm({
               ))}
             </SelectField>
           </Field>
+          {canChooseCommittee ? (
+            <Field label="Visible to" hint="Club-wide = everyone with Docs access.">
+              <SelectField name="committee" defaultValue={d?.committee ?? ""}>
+                <option value="">Club-wide (all committees)</option>
+                {committees.map((c) => (
+                  <option key={c} value={c}>
+                    {c} only
+                  </option>
+                ))}
+              </SelectField>
+            </Field>
+          ) : (
+            <Field label="Visible to" hint="Your committee + execs.">
+              <input type="hidden" name="committee" value={lockedCommittee ?? ""} />
+              <TextInput value={lockedCommittee ?? "Your committee"} disabled readOnly />
+            </Field>
+          )}
           <Field label="Assignee" hint="For deliverable docs">
             <SelectField
               name="assignee_id"

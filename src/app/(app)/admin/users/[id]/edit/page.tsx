@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { Badge, PageHeader, SectionCard } from "@/components/ui";
-import { getRoleOptions, getUserById } from "@/lib/admin-queries";
+import { getRoles, getUserById } from "@/lib/admin-queries";
 import { getCurrentUser } from "@/lib/dal";
 
 import { updateUser } from "../../actions";
@@ -17,12 +17,18 @@ export default async function EditUserPage({
   const userId = Number(id);
   if (Number.isNaN(userId)) notFound();
 
-  const [user, roles, me] = await Promise.all([
+  const [user, allRoles, me] = await Promise.all([
     getUserById(userId),
-    getRoleOptions(),
+    getRoles(),
     getCurrentUser(),
   ]);
   if (!user) notFound();
+  const roles = allRoles.map((r) => ({
+    id: r.id,
+    name: r.name,
+    modules: r.modules,
+    writeModules: r.writeModules,
+  }));
 
   const onboarded = !!user.onboardingCompletedAt;
 

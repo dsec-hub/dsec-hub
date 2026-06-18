@@ -6,7 +6,9 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { meetings, tasks, type Attendee } from "@/db/workspace-schema";
-import { requireWrite } from "@/lib/dal";
+import { requireWrite, type CurrentUser } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
+import { canWriteCommittee } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
 import { logMutation } from "@/lib/usage";
 
@@ -47,6 +49,7 @@ function parseMeeting(fd: FormData) {
   return {
     title: str(fd, "title") ?? "",
     type: str(fd, "type"),
+    committee: str(fd, "committee"),
     meetingDate: str(fd, "meeting_date"),
     location: str(fd, "location"),
     status: str(fd, "status"),
@@ -58,6 +61,14 @@ function parseMeeting(fd: FormData) {
   };
 }
 
+/** Resolve the committee a meeting may be saved with. "all"-scope users save the
+ * submitted value (or club-wide); "own"-scope users are forced to their own
+ * committee — they can never create club-wide or other-team notes. */
+function resolveMeetingCommittee(user: CurrentUser, submitted: string | null): string | null {
+  const { all, committee } = committeeScopeOf(user);
+  return all ? submitted || null : committee;
+}
+
 function revalidateMeetings() {
   revalidatePath("/meetings");
   revalidatePath("/dashboard");
@@ -67,6 +78,8 @@ export async function createMeeting(_prev: FormState, fd: FormData): Promise<For
   const user = await requireWrite("meetings");
   const values = parseMeeting(fd);
   if (!values.title) return { error: "Title is required." };
+  // Scoped (own-committee) users can only file notes for their own team.
+  values.committee = resolveMeetingCommittee(user, values.committee ?? null);
   const [row] = await db.insert(meetings).values(values).returning({ id: meetings.id });
   await logMutation(user, "create", "meeting", row?.id);
   revalidateMeetings();
@@ -79,8 +92,20 @@ export async function updateMeeting(
   fd: FormData,
 ): Promise<FormState> {
   const user = await requireWrite("meetings");
+  const [existing] = await db
+    .select({ committee: meetings.committee })
+    .from(meetings)
+    .where(eq(meetings.id, id))
+    .limit(1);
+  if (!existing) return { error: "Meeting not found." };
+  // Defense in depth: an own-scope user may only edit their own committee's
+  // meetings (the scoped query already hides others, this blocks forged POSTs).
+  if (!canWriteCommittee(user.viewConfig.committeeScope, user.userCommittee, existing.committee)) {
+    redirect("/meetings");
+  }
   const values = parseMeeting(fd);
   if (!values.title) return { error: "Title is required." };
+  values.committee = resolveMeetingCommittee(user, values.committee ?? null);
   await db
     .update(meetings)
     .set({ ...values, updatedAt: new Date().toISOString() })
@@ -90,8 +115,21 @@ export async function updateMeeting(
   redirect("/meetings");
 }
 
+/** Bounce if the user can't write this meeting's committee (scoped-owner guard). */
+async function assertCanWriteMeeting(user: CurrentUser, id: number): Promise<void> {
+  const [existing] = await db
+    .select({ committee: meetings.committee })
+    .from(meetings)
+    .where(eq(meetings.id, id))
+    .limit(1);
+  if (existing && !canWriteCommittee(user.viewConfig.committeeScope, user.userCommittee, existing.committee)) {
+    redirect("/meetings");
+  }
+}
+
 export async function archiveMeeting(id: number): Promise<void> {
   const user = await requireWrite("meetings");
+  await assertCanWriteMeeting(user, id);
   await db
     .update(meetings)
     .set({ archived: true, updatedAt: new Date().toISOString() })
@@ -103,6 +141,7 @@ export async function archiveMeeting(id: number): Promise<void> {
 
 export async function deleteMeeting(id: number): Promise<void> {
   const user = await requireWrite("meetings");
+  await assertCanWriteMeeting(user, id);
   await db.delete(meetings).where(eq(meetings.id, id));
   await logMutation(user, "delete", "meeting", id);
   revalidateMeetings();

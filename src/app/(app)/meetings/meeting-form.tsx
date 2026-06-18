@@ -21,6 +21,9 @@ export function MeetingForm({
   meeting,
   events,
   people,
+  committees,
+  canChooseCommittee,
+  lockedCommittee,
   onSuccess,
   onCancel,
   canWrite = true,
@@ -29,6 +32,12 @@ export function MeetingForm({
   meeting?: MeetingRow;
   events: Option[];
   people: Option[];
+  /** Committee names for the visibility picker (only used when canChooseCommittee). */
+  committees: string[];
+  /** "all"-scope users pick any committee/club-wide; "own"-scope users are locked. */
+  canChooseCommittee: boolean;
+  /** The own-scope user's committee — the meeting is forced to this. */
+  lockedCommittee: string | null;
   onSuccess?: () => void;
   onCancel?: () => void;
   canWrite?: boolean;
@@ -59,6 +68,23 @@ export function MeetingForm({
               ))}
             </SelectField>
           </Field>
+          {canChooseCommittee ? (
+            <Field label="Visible to" hint="Who can see these notes. Club-wide = everyone.">
+              <SelectField name="committee" defaultValue={m?.committee ?? ""}>
+                <option value="">Club-wide (all committees)</option>
+                {committees.map((c) => (
+                  <option key={c} value={c}>
+                    {c} only
+                  </option>
+                ))}
+              </SelectField>
+            </Field>
+          ) : (
+            <Field label="Visible to" hint="Your committee + execs.">
+              <input type="hidden" name="committee" value={lockedCommittee ?? ""} />
+              <TextInput value={lockedCommittee ?? "Your committee"} disabled readOnly />
+            </Field>
+          )}
           <Field label="Date">
             <DateField name="meeting_date" defaultValue={m?.meetingDate ?? ""} />
           </Field>

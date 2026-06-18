@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { UndoButton } from "@/components/undo-button";
@@ -13,8 +14,10 @@ import {
   getProjectOptions,
   getTaskById,
 } from "@/lib/workspace-queries";
+import { getSubtasks } from "@/lib/task-view-queries";
 
 import { archiveTask, deleteTask, updateTask } from "../../actions";
+import { Subtasks } from "../../subtasks";
 import { TaskForm } from "../../task-form";
 
 export default async function EditTaskPage({
@@ -28,13 +31,14 @@ export default async function EditTaskPage({
   const taskId = Number(id);
   if (Number.isNaN(taskId)) notFound();
 
-  const [task, boards, people, events, projects, committees] = await Promise.all([
+  const [task, boards, people, events, projects, committees, subtasks] = await Promise.all([
     getTaskById(taskId),
     getBoardOptions(),
     getPersonOptions(),
     getEventOptions(),
     getProjectOptions(),
     getCommitteeOptions(),
+    getSubtasks(taskId),
   ]);
   if (!task) notFound();
 
@@ -72,6 +76,22 @@ export default async function EditTaskPage({
         redirectOnSuccess="/tasks"
         canWrite={writable}
       />
+
+      {/* One-level subtasks: only top-level tasks get a checklist. A subtask
+          shows a link back to its parent instead. */}
+      <div className="mt-6">
+        {task.parentTaskId == null ? (
+          <Subtasks parentId={taskId} subtasks={subtasks} canWrite={writable} />
+        ) : (
+          <p className="text-sm text-muted">
+            This is a subtask of{" "}
+            <Link href={`/tasks/${task.parentTaskId}/edit`} className="text-accent-text hover:underline">
+              its parent task
+            </Link>
+            .
+          </p>
+        )}
+      </div>
     </>
   );
 }

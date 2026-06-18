@@ -300,7 +300,14 @@ export default async function EventDetailPage({
       )}
 
       <div className="mb-6">
-        <RelatedTasks kind="event" parentId={eventId} tasks={relatedTasks} canWrite={writable} />
+        <RelatedTasks
+          kind="event"
+          parentId={eventId}
+          tasks={relatedTasks}
+          canWrite={writable}
+          committees={committees.map((c) => c.name)}
+          defaultCommittee={event.committee}
+        />
       </div>
 
       {media.length > 0 && (

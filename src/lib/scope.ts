@@ -8,6 +8,18 @@ import { projects } from "@/db/workspace-schema";
 import { canAccess, canWrite, isOwner, scopeFor, type ScopedAccess } from "@/lib/rbac";
 import type { CurrentUser } from "@/lib/dal";
 
+/** A user's committee visibility for meetings + meeting-notes documents:
+ * `all` → every committee; otherwise scoped to `committee` (+ club-wide). */
+export type CommitteeScope = { all: boolean; committee: string | null };
+
+export function committeeScopeOf(user: CurrentUser): CommitteeScope {
+  // Admins always see all; otherwise honour the role's committeeScope. (During
+  // preview the admin module is narrowed away, so the previewed role's scope
+  // applies — exactly what we want.)
+  const all = canAccess(user.modules, "admin") || user.viewConfig.committeeScope === "all";
+  return { all, committee: user.userCommittee };
+}
+
 /**
  * Object-level (ownership) access — the DB half of the model whose pure decisions
  * live in lib/rbac.ts (isOwner / scopeFor). It is PURELY ADDITIVE on top of the

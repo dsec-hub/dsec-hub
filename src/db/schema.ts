@@ -1,5 +1,7 @@
 import { pgTable, varchar, index, serial, timestamp, json, text, integer, doublePrecision, uniqueIndex, boolean, foreignKey, unique, date, time, numeric } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
+import type { ViewConfigTV } from "@/lib/task-view-types"
+import type { ViewConfigEV } from "@/lib/event-view-types"
 
 
 
@@ -221,6 +223,34 @@ export const finance = pgTable("finance", {
 // `scripts/setup-roles.ts`, NOT by Alembic). A role maps to a set of module
 // keys; a role carrying the "admin" module is a superuser. ---
 
+/**
+ * Per-ROLE presentation/focus config (the "Focus" layer). Stored as JSON on
+ * `app_role.view_config`. This NEVER grants access beyond `modules` — it only
+ * chooses what is surfaced first and how, of the things the role may already
+ * see. Consumers (dashboard, nav, post-login redirect, tasks default view)
+ * always hard-gate with `requireModule`/`canAccess` BEFORE consulting this.
+ *
+ *   • sections        — which dashboard section ids are visible (see
+ *                       dashboard/dashboard-config.ts CANONICAL_SECTIONS).
+ *   • landingPath      — post-login + access-denied bounce target (a default,
+ *                       NOT a jail). Validated against the role's modules.
+ *   • defaultTaskView — a built-in view KEY string (never an FK).
+ *   • navOrder        — optional reorder/narrow of nav GROUP labels.
+ *
+ * Distinct from `ViewConfigTV` (lib/task-view-types.ts) which is per-VIEW.
+ */
+export type ViewConfig = {
+  version: 1;
+  sections: Record<string, boolean>;
+  landingPath?: string;
+  defaultTaskView?: string;
+  navOrder?: string[];
+  // Committee-scoped visibility for meetings + meeting-notes documents:
+  //   "all"  → sees every committee's meetings/notes (Exec/Secretary/Admin/Auditor)
+  //   "own"  → only their own committee's + club-wide (Leads/Members)
+  committeeScope?: "all" | "own";
+};
+
 export const appRole = pgTable("app_role", {
 	id: serial().primaryKey().notNull(),
 	name: varchar({ length: 64 }).notNull(),
@@ -230,6 +260,10 @@ export const appRole = pgTable("app_role", {
 	// Subset of `modules` this role may also EDIT (write ⊆ read). Modules in
 	// `modules` but not here are view-only. "admin" implies write everywhere.
 	writeModules: json("write_modules").$type<string[]>().default([]).notNull(),
+	// Per-role Focus/presentation config (see ViewConfig above). Nullable; the
+	// DAL normalises null/legacy shapes to a safe default. Added app-side via
+	// `scripts/add-app-role-view-config-column.ts`, NOT via Alembic.
+	viewConfig: json("view_config").$type<ViewConfig>(),
 	// System roles (e.g. Admin) cannot be deleted from the UI.
 	isSystem: boolean("is_system").default(false).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -245,6 +279,11 @@ export const appUser = pgTable("app_user", {
 	passwordHash: varchar("password_hash", { length: 512 }).notNull(),
 	role: varchar({ length: 32 }).default('exec').notNull(),
 	roleId: integer("role_id"),
+	// Per-user privilege overrides, UNION-ed with the role at read time (dal.ts).
+	// `extraModules` = extra read access; `extraWriteModules` = extra edit access.
+	// Elevate-only; "admin" is intentionally never granted here (role-only).
+	extraModules: json("extra_modules").$type<string[]>().default([]).notNull(),
+	extraWriteModules: json("extra_write_modules").$type<string[]>().default([]).notNull(),
 	// Optional link to this login's roster record. Set on invite acceptance
 	// (match by email, else a new people row is created) — see invite/[token].
 	personId: integer("person_id"),
@@ -277,6 +316,65 @@ export const appUser = pgTable("app_user", {
 			foreignColumns: [people.id],
 			name: "app_user_person_id_fkey"
 		}),
+]);
+
+// --- Per-user saved Tasks views (app-owned; created via
+// `scripts/add-task-view-table.ts`, NOT by Alembic). Each row is one user's
+// saved filter/group/sort/mode lens over the task pool. Hub-owned: dsec-api
+// never reads this. `config` is typed by ViewConfigTV (lib/task-view-types). ---
+
+export const appTaskView = pgTable("task_view", {
+	id: serial().primaryKey().notNull(),
+	userId: integer("user_id").notNull(),
+	name: varchar({ length: 128 }).notNull(),
+	description: text(),
+	config: json().$type<ViewConfigTV>().default(sql`'{}'::jsonb`).notNull(),
+	sortOrder: integer("sort_order").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	archived: boolean().default(false).notNull(),
+}, (table) => [
+	uniqueIndex("ix_task_view_user_name")
+		.using("btree", sql`${table.userId}, lower(${table.name})`)
+		.where(sql`${table.archived} = false`),
+	index("ix_task_view_user_id")
+		.using("btree", table.userId.asc().nullsLast().op("int4_ops"))
+		.where(sql`${table.archived} = false`),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [appUser.id],
+			name: "task_view_user_id_fkey"
+		}).onDelete("cascade"),
+]);
+
+// --- Per-user saved Events views (app-owned; created via
+// `scripts/add-event-view-table.ts`, NOT by Alembic). Each row is one user's
+// saved filter/group/sort/mode lens over the events pool. Hub-owned: dsec-api
+// never reads this. `config` is typed by ViewConfigEV (lib/event-view-types).
+// Mirrors `task_view`. ---
+
+export const appEventView = pgTable("event_view", {
+	id: serial().primaryKey().notNull(),
+	userId: integer("user_id").notNull(),
+	name: varchar({ length: 128 }).notNull(),
+	description: text(),
+	config: json().$type<ViewConfigEV>().default(sql`'{}'::jsonb`).notNull(),
+	sortOrder: integer("sort_order").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	archived: boolean().default(false).notNull(),
+}, (table) => [
+	uniqueIndex("ix_event_view_user_name")
+		.using("btree", sql`${table.userId}, lower(${table.name})`)
+		.where(sql`${table.archived} = false`),
+	index("ix_event_view_user_id")
+		.using("btree", table.userId.asc().nullsLast().op("int4_ops"))
+		.where(sql`${table.archived} = false`),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [appUser.id],
+			name: "event_view_user_id_fkey"
+		}).onDelete("cascade"),
 ]);
 
 export const appInvite = pgTable("app_invite", {

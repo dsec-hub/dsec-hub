@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { taskBoards, tasks } from "@/db/workspace-schema";
-import { requireWrite } from "@/lib/dal";
+import { assertNotPreviewing, requireModule, requireWrite, type CurrentUser } from "@/lib/dal";
+import { canWrite, canWriteTask } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
@@ -14,6 +16,26 @@ import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
 import type { TaskParentKind } from "@/lib/workspace-queries";
 
 export type FormState = ActionResult;
+
+/**
+ * Authorise a mutation on ONE existing task. Module writers (and admins) may
+ * write any task; a member without the tasks write-module may write only the
+ * tasks ASSIGNED to them (the "edit your own work" rule). Bounces otherwise.
+ */
+async function assertTaskWrite(taskId: number): Promise<CurrentUser> {
+  const user = await requireModule("tasks");
+  const [t] = await db
+    .select({ assigneeId: tasks.assigneeId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  if (!t) redirect("/tasks");
+  if (!canWriteTask(user.modules, user.writeModules, user.personId, t.assigneeId)) {
+    redirect("/dashboard");
+  }
+  assertNotPreviewing(user);
+  return user;
+}
 
 // Parent entity → the dashboard module that governs it. Quick-adding a task from
 // an entity's detail page requires write to that module (you manage the entity).
@@ -37,6 +59,10 @@ export async function quickAddRelatedTask(
   const title = str(fd, "title");
   if (!title) return;
   const values: typeof tasks.$inferInsert = { title, status: "To Do" };
+  // Which committee owns this task (defaults to the parent's committee in the UI;
+  // a single event can route tasks to several committees).
+  const committee = str(fd, "committee");
+  if (committee) values.committee = committee;
   if (kind === "sponsor") values.relatedSponsorId = parentId;
   else if (kind === "event") values.relatedEventId = parentId;
   else values.relatedProjectId = parentId;
@@ -68,9 +94,13 @@ function revalidateTasks() {
 }
 
 export async function createTask(_prev: FormState, fd: FormData): Promise<FormState> {
-  const user = await requireWrite("tasks");
+  // Members (task readers without write) may create, but only self-assigned.
+  const user = await requireModule("tasks");
+  assertNotPreviewing(user);
+  const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
   const values = parseTask(fd);
   if (!values.title) return { error: "Title is required." };
+  if (!fullWrite) values.assigneeId = user.personId; // force self-assignment
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
   revalidateTasks();
@@ -82,9 +112,12 @@ export async function updateTask(
   _prev: FormState,
   fd: FormData,
 ): Promise<FormState> {
-  const user = await requireWrite("tasks");
+  const user = await assertTaskWrite(id);
+  const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
   const values = parseTask(fd);
   if (!values.title) return { error: "Title is required." };
+  // A member editing their own task can't reassign it away from themselves.
+  if (!fullWrite) values.assigneeId = user.personId;
   const undo = await snapshotForUpdate("task", id);
   await db
     .update(tasks)
@@ -96,14 +129,56 @@ export async function updateTask(
 }
 
 export async function archiveTask(id: number): Promise<FormState> {
-  const user = await requireWrite("tasks");
-  await db
-    .update(tasks)
-    .set({ archived: true, updatedAt: new Date().toISOString() })
-    .where(eq(tasks.id, id));
+  const user = await assertTaskWrite(id);
+  const now = new Date().toISOString();
+  await db.update(tasks).set({ archived: true, updatedAt: now }).where(eq(tasks.id, id));
+  // Cascade-archive any subtasks so children never outlive their parent on the board.
+  await db.update(tasks).set({ archived: true, updatedAt: now }).where(eq(tasks.parentTaskId, id));
   await logMutation(user, "archive", "task", id);
   revalidateTasks();
   return { ok: true, message: "Task archived", undo: archiveToken("task", id) };
+}
+
+/**
+ * Add a subtask (one level only) under a parent the user may write. The child
+ * inherits the parent's board + committee. Refuses to nest under a task that is
+ * itself a subtask.
+ */
+export async function createSubtask(parentId: number, fd: FormData): Promise<void> {
+  const user = await assertTaskWrite(parentId);
+  const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
+  const title = str(fd, "title");
+  if (!title) return;
+  const [parent] = await db
+    .select({ boardId: tasks.boardId, committee: tasks.committee, parentTaskId: tasks.parentTaskId })
+    .from(tasks)
+    .where(eq(tasks.id, parentId))
+    .limit(1);
+  if (!parent || parent.parentTaskId != null) return; // enforce a single level
+  const values: typeof tasks.$inferInsert = {
+    title,
+    parentTaskId: parentId,
+    boardId: parent.boardId,
+    committee: parent.committee,
+    status: "To Do",
+  };
+  if (!fullWrite) values.assigneeId = user.personId;
+  const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
+  await logMutation(user, "create", "task", row?.id);
+  revalidatePath(`/tasks/${parentId}/edit`);
+  revalidateTasks();
+}
+
+/** Tick / untick a subtask (sets status + completedAt). */
+export async function toggleSubtask(childId: number, done: boolean): Promise<void> {
+  const user = await assertTaskWrite(childId);
+  const now = new Date().toISOString();
+  await db
+    .update(tasks)
+    .set({ status: done ? "Done" : "To Do", completedAt: done ? now : null, updatedAt: now })
+    .where(eq(tasks.id, childId));
+  await logMutation(user, "update", "task", childId);
+  revalidateTasks();
 }
 
 export async function deleteTask(id: number): Promise<FormState> {
@@ -125,13 +200,18 @@ export async function quickAddTask(
   status: string,
   fd: FormData,
 ): Promise<void> {
-  const user = await requireWrite("tasks");
+  const user = await requireModule("tasks");
+  assertNotPreviewing(user);
+  const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
   const title = str(fd, "title");
   if (!title) return;
-  const [row] = await db
-    .insert(tasks)
-    .values({ boardId, status, title })
-    .returning({ id: tasks.id });
+  const values: typeof tasks.$inferInsert = { boardId, status, title };
+  // Inherit the active committee filter (passed as a hidden field) so a task
+  // added in a committee-scoped view is tagged to that committee.
+  const committee = str(fd, "committee");
+  if (committee) values.committee = committee;
+  if (!fullWrite) values.assigneeId = user.personId; // members add self-assigned
+  const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
   revalidateTasks();
 }
@@ -232,7 +312,7 @@ export async function moveTask(taskId: number, fd: FormData): Promise<void> {
 
 /** Programmatic move (used by the drag-and-drop board). */
 export async function moveTaskTo(taskId: number, status: string): Promise<void> {
-  const user = await requireWrite("tasks");
+  const user = await assertTaskWrite(taskId);
   const now = new Date().toISOString();
   await db
     .update(tasks)
@@ -242,6 +322,47 @@ export async function moveTaskTo(taskId: number, status: string): Promise<void> 
       updatedAt: now,
     })
     .where(eq(tasks.id, taskId));
+  await logMutation(user, "update", "task", taskId);
+  revalidatePath("/tasks");
+  revalidatePath("/dashboard");
+}
+
+/**
+ * Generic single-field reassignment used by drag-and-drop on the views board
+ * when grouped by status / committee / board / assignee / priority. Authorised
+ * per-task via assertTaskWrite (so members can only move their own cards).
+ */
+export async function reassignTask(taskId: number, dim: string, value: string): Promise<void> {
+  const user = await assertTaskWrite(taskId);
+  // A member may move their OWN task across status/priority, but reassigning it
+  // to another person/board/committee is a management action — full write only.
+  const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
+  const now = new Date().toISOString();
+  const set: Partial<typeof tasks.$inferInsert> = { updatedAt: now };
+  switch (dim) {
+    case "status":
+      set.status = value;
+      set.completedAt = value === "Done" ? now : null;
+      break;
+    case "priority":
+      set.priority = value && value !== "__none__" ? value : null;
+      break;
+    case "committee":
+      if (!fullWrite) return;
+      set.committee = value && value !== "__none__" ? value : null;
+      break;
+    case "board":
+      if (!fullWrite) return;
+      set.boardId = value === "inbox" || value === "" ? null : Number(value) || null;
+      break;
+    case "assignee":
+      if (!fullWrite) return;
+      set.assigneeId = value === "__none__" || value === "" ? null : Number(value) || null;
+      break;
+    default:
+      return;
+  }
+  await db.update(tasks).set(set).where(eq(tasks.id, taskId));
   await logMutation(user, "update", "task", taskId);
   revalidatePath("/tasks");
   revalidatePath("/dashboard");

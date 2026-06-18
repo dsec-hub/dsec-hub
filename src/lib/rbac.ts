@@ -62,6 +62,19 @@ export function moduleForPath(pathname: string): ModuleKey | null {
   return null;
 }
 
+/** Whether `path` is a valid landing/redirect target for these modules: true if
+ * the path's owning module is accessible, or the path is always-allowed (e.g.
+ * /dashboard). Used to validate a role's Focus landingPath so it can never point
+ * a user at a module they lack. Pure/edge-safe. */
+export function isValidLandingPath(
+  modules: readonly string[] | null | undefined,
+  path: string | null | undefined,
+): boolean {
+  if (!path || !path.startsWith("/")) return false;
+  const mod = moduleForPath(path);
+  return mod === null || canAccess(modules, mod);
+}
+
 /** Keep only valid, de-duplicated module keys from arbitrary input. */
 export function sanitizeModules(input: readonly string[]): ModuleKey[] {
   const valid = new Set<string>(MODULE_KEYS);
@@ -149,4 +162,48 @@ export function isOwner(
 export function scopeFor(hasModule: boolean, ownsAny: boolean): ScopedAccess {
   if (hasModule) return "full";
   return ownsAny ? "owned" : "none";
+}
+
+// --- Committee-scoped visibility (meetings + meeting-notes documents) ---------
+// A second enforced scope (alongside sponsors/finance module-gating): records
+// carry an owning `committee`. A role's committeeScope is "all" (sees every
+// committee — exec/secretary/admin/auditor) or "own" (only their committee +
+// club-wide). null record committee = club-wide (visible to everyone with the
+// module). Pure decisions; the SQL filter lives in workspace-queries.
+
+/** Can a viewer (with this committeeScope + their own committee) READ a record
+ * owned by `recordCommittee`? */
+export function canSeeCommittee(
+  scope: "all" | "own" | undefined,
+  userCommittee: string | null | undefined,
+  recordCommittee: string | null | undefined,
+): boolean {
+  if (scope === "all") return true;
+  if (recordCommittee == null) return true; // club-wide / all-hands
+  return !!userCommittee && recordCommittee === userCommittee;
+}
+
+/** Can a viewer WRITE/own a committee record? "all" scope → any; "own" scope →
+ * only their own committee (never club-wide or another team's). */
+export function canWriteCommittee(
+  scope: "all" | "own" | undefined,
+  userCommittee: string | null | undefined,
+  recordCommittee: string | null | undefined,
+): boolean {
+  if (scope === "all") return true;
+  return !!userCommittee && recordCommittee === userCommittee;
+}
+
+/** Whether a user may WRITE a specific task. Module writers (and admins) may
+ * write any task; otherwise a user may write only the tasks ASSIGNED to them
+ * (the "Member edits their own tasks" rule). Pure — used both to gate the UI
+ * and as the authoritative check in task Server Actions. */
+export function canWriteTask(
+  modules: readonly string[] | null | undefined,
+  writeModules: readonly string[] | null | undefined,
+  personId: number | null | undefined,
+  assigneeId: number | null | undefined,
+): boolean {
+  if (canWrite(modules, writeModules, "tasks")) return true;
+  return isOwner(personId, assigneeId);
 }

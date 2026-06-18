@@ -4,6 +4,7 @@ import { ViewTabs } from "@/components/dashboard";
 import { Badge, EmptyState, PageHeader, SectionCard, buttonPrimary } from "@/components/ui";
 import type { BadgeVariant } from "@/lib/options";
 import { requireModule } from "@/lib/dal";
+import { committeeScopeOf } from "@/lib/scope";
 import { formatDate } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import { getDocuments } from "@/lib/workspace-queries";
@@ -62,7 +63,7 @@ export default async function DocsPage({
     ? (rawType as DocType)
     : "All";
 
-  const docs = await getDocuments(active === "All" ? {} : { type: active });
+  const docs = await getDocuments(committeeScopeOf(me), active === "All" ? {} : { type: active });
 
   const tabs = DOC_TYPES.map((t) => ({
     key: t,
@@ -112,6 +113,7 @@ export default async function DocsPage({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {d.committee && <Badge variant="accent">{d.committee}</Badge>}
                     <Badge variant="neutral">{d.type ?? "—"}</Badge>
                     <Badge variant={statusVariant(d.status)}>{d.status ?? "—"}</Badge>
                   </div>

@@ -4,6 +4,7 @@ import { Icons } from "@/components/icons";
 import { allowedScopesFor } from "@/lib/api-tokens";
 import { requireUser } from "@/lib/dal";
 
+import { clearPreviewRole } from "../admin/preview/actions";
 import { SettingsNav } from "./settings-nav";
 
 export default async function SettingsLayout({
@@ -25,6 +26,7 @@ export default async function SettingsLayout({
 
   async function handleSignOut() {
     "use server";
+    await clearPreviewRole(); // never leave a preview cookie across sessions
     await signOut({ redirectTo: "/signin" });
   }
 

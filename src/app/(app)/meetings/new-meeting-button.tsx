@@ -12,9 +12,15 @@ import { MeetingForm } from "./meeting-form";
 export function NewMeetingButton({
   events,
   people,
+  committees,
+  canChooseCommittee,
+  lockedCommittee,
 }: {
   events: Option[];
   people: Option[];
+  committees: string[];
+  canChooseCommittee: boolean;
+  lockedCommittee: string | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -27,6 +33,9 @@ export function NewMeetingButton({
           action={createMeeting}
           events={events}
           people={people}
+          committees={committees}
+          canChooseCommittee={canChooseCommittee}
+          lockedCommittee={lockedCommittee}
           onSuccess={() => setOpen(false)}
           onCancel={() => setOpen(false)}
         />

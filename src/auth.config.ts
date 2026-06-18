@@ -29,7 +29,9 @@ export const authConfig = {
       // DAL on every data read / Server Action (defense in depth).
       const moduleKey = moduleForPath(path);
       if (moduleKey && !canAccess(auth!.user.modules, moduleKey)) {
-        return Response.redirect(new URL("/", nextUrl));
+        // Don't dump them on a blank dashboard with no explanation — send them
+        // to an access-denied page that names what they tried to open.
+        return Response.redirect(new URL(`/dashboard/access-denied?from=${moduleKey}`, nextUrl));
       }
       return true;
     },

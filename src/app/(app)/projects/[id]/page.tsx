@@ -7,6 +7,7 @@ import { RelatedTasks } from "@/components/related-tasks";
 import { Badge, Card, PageHeader, SectionCard, buttonSecondary } from "@/components/ui";
 import { requireUser } from "@/lib/dal";
 import { formatDate } from "@/lib/format";
+import { getCommitteeOptions } from "@/lib/committee-queries";
 import { getEventById } from "@/lib/queries";
 import { requireProjectView } from "@/lib/scope";
 import { projectStatusVariant } from "@/lib/workspace-options";
@@ -28,9 +29,10 @@ export default async function ProjectDetailPage({
   // Access: module-holders see any project; a lead sees the project they lead
   // (read-only); anyone else is bounced. See lib/scope.ts.
   const { writable } = await requireProjectView(me, project);
-  const [people, relatedTasks] = await Promise.all([
+  const [people, relatedTasks, committees] = await Promise.all([
     getPersonOptions(),
     getRelatedTasks("project", pid),
+    getCommitteeOptions(),
   ]);
   const lead = people.find((p) => p.id === project.leadId)?.name;
   // Cross-link: the event this project came out of (if any).
@@ -104,7 +106,13 @@ export default async function ProjectDetailPage({
       </div>
 
       <div className="mt-6">
-        <RelatedTasks kind="project" parentId={project.id} tasks={relatedTasks} canWrite={writable} />
+        <RelatedTasks
+          kind="project"
+          parentId={project.id}
+          tasks={relatedTasks}
+          canWrite={writable}
+          committees={committees.map((c) => c.name)}
+        />
       </div>
 
       {project.notes && (
