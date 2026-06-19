@@ -14,11 +14,21 @@ import { toast } from "sonner";
 
 import { Field, FormError, TextArea, TextInput } from "@/components/form";
 import { Icons } from "@/components/icons";
-import { buttonPrimary, buttonSecondary } from "@/components/ui";
+import { Badge, buttonPrimary, buttonSecondary } from "@/components/ui";
 import { cn, initials } from "@/lib/format";
 import { cropToBlob, isHeic, toDisplayable } from "@/lib/image-crop";
 
-import { finishOnboarding, uploadOwnPhoto, type OnboardingProfile } from "./actions";
+import {
+  checkMembership,
+  finishOnboarding,
+  uploadOwnPhoto,
+  type MembershipCheck,
+  type OnboardingProfile,
+} from "./actions";
+
+// A student ID is numeric (commonly 9 digits). Mirrors STUDENT_ID_RE in
+// actions.ts, which re-validates on finish.
+const STUDENT_ID_RE = /^\d{6,12}$/;
 
 const LINK_FIELDS: { key: keyof OnboardingProfile; label: string; placeholder: string }[] = [
   { key: "website", label: "Website / portfolio", placeholder: "https://…" },
@@ -28,12 +38,13 @@ const LINK_FIELDS: { key: keyof OnboardingProfile; label: string; placeholder: s
   { key: "discord", label: "Discord", placeholder: "username" },
 ];
 
-const STEPS = ["Welcome", "Details", "Photo", "Links"] as const;
+const STEPS = ["Welcome", "Details", "Membership", "Photo", "Links"] as const;
 
 // Per-step header copy. Step 0's title is personalised at render time.
 const HEADINGS: { title: string; sub: string }[] = [
   { title: "Welcome to DSEC", sub: "Let's set up your committee profile. It takes about a minute." },
   { title: "A bit about you", sub: "This is what the committee and the public team page will see." },
+  { title: "Link your membership", sub: "Your student ID connects you to the DUSA club roster so we can verify your membership." },
   { title: "Add a profile photo", sub: "A square headshot that shows up on the public team page." },
   { title: "Ways to reach you", sub: "Add at least one link. You can change these any time in Settings." },
 ];
@@ -87,11 +98,14 @@ export function OnboardingWizard({
 
   const hasLink = LINK_FIELDS.some(({ key }) => (form[key] ?? "").trim());
 
-  // Per-step gate for the primary button (matched server-side on finish).
+  // Per-step gate for the primary button (matched server-side on finish). The
+  // membership gate only checks the ID's shape — not whether it's in the roster
+  // yet — so a brand-new member is never blocked from finishing.
   const canAdvance =
     step === 0 ? true
     : step === 1 ? !!form.name.trim() && !!form.bio.trim()
-    : step === 2 ? !!photoUrl
+    : step === 2 ? STUDENT_ID_RE.test(form.studentId.trim())
+    : step === 3 ? !!photoUrl
     : hasLink;
 
   const lastStep = step === STEPS.length - 1;
@@ -168,8 +182,9 @@ export function OnboardingWizard({
           >
             {step === 0 && <WelcomeStep email={email} name={form.name} />}
             {step === 1 && <DetailsStep form={form} set={set} />}
-            {step === 2 && <PhotoStep photoUrl={photoUrl} onUploaded={setPhotoUrl} />}
-            {step === 3 && <LinksStep form={form} set={set} hasLink={hasLink} />}
+            {step === 2 && <MembershipStep form={form} set={set} />}
+            {step === 3 && <PhotoStep photoUrl={photoUrl} onUploaded={setPhotoUrl} />}
+            {step === 4 && <LinksStep form={form} set={set} hasLink={hasLink} />}
           </div>
         </AutoHeight>
       </div>
@@ -300,6 +315,7 @@ function Stepper({ step }: { step: number }) {
 function WelcomeStep({ email, name }: { email: string; name: string }) {
   const items = [
     { icon: <Icons.people className="size-4" />, title: "A bit about you", desc: "Your name and a one-line bio." },
+    { icon: <Icons.members className="size-4" />, title: "Your membership", desc: "Your student ID, to link your DUSA club membership." },
     { icon: <Icons.camera className="size-4" />, title: "A profile photo", desc: "A square headshot, cropped right here." },
     { icon: <Icons.link className="size-4" />, title: "Ways to reach you", desc: "A link or two, like GitHub or LinkedIn." },
   ];
@@ -370,6 +386,87 @@ function DetailsStep({
           </span>
         </div>
       </Field>
+    </div>
+  );
+}
+
+/** Required student ID + a debounced, non-blocking live lookup against the DUSA
+ * roster. The lookup is reassurance only — a new member who isn't in a weekly
+ * report yet still advances; the ID links their membership once they appear. */
+function MembershipStep({
+  form,
+  set,
+}: {
+  form: OnboardingProfile;
+  set: (key: keyof OnboardingProfile, value: string) => void;
+}) {
+  const id = form.studentId.trim();
+  const valid = STUDENT_ID_RE.test(id);
+  // The result is tagged with the ID it was fetched for, so both "checking" and
+  // the shown result derive during render — no setState runs in the effect body.
+  const [result, setResult] = useState<{ id: string; check: MembershipCheck } | null>(null);
+  const reqId = useRef(0);
+
+  // Debounce the roster lookup while a well-formed ID is typed. A request token
+  // discards any response a newer keystroke has already superseded.
+  useEffect(() => {
+    if (!valid) return;
+    const my = ++reqId.current;
+    const t = setTimeout(() => {
+      void checkMembership(id).then((check) => {
+        if (my === reqId.current) setResult({ id, check });
+      });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [id, valid]);
+
+  const shown = valid && result?.id === id ? result.check : null;
+  const checking = valid && !shown;
+  const showFormatHint = id.length > 0 && !valid;
+
+  return (
+    <div className="space-y-4">
+      <Field
+        label="Student ID"
+        hint="We match this against the DUSA roster to verify your club membership. Numbers only."
+      >
+        <TextInput
+          value={form.studentId}
+          onChange={(e) => set("studentId", e.target.value.replace(/\D/g, ""))}
+          placeholder="220123456"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={12}
+          aria-describedby="membership-status"
+        />
+      </Field>
+
+      <div id="membership-status" aria-live="polite" className="min-h-5 text-xs">
+        {showFormatHint ? (
+          <p className="text-muted">A student ID is numbers only — usually around 9 digits.</p>
+        ) : checking ? (
+          <p className="flex items-center gap-2 text-muted">
+            <Spinner className="size-3" /> Checking the membership roster…
+          </p>
+        ) : shown?.status === "found" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 font-medium text-success">
+              <Icons.check className="size-3.5" /> Found you
+            </span>
+            <Badge variant={shown.isCurrent ? "success" : "neutral"}>
+              {shown.isCurrent ? "Current member" : "Lapsed"}
+            </Badge>
+            <Badge variant={shown.dusaMember ? "success" : "neutral"}>
+              {shown.dusaMember ? "DUSA member" : "Non-DUSA"}
+            </Badge>
+            {shown.detail && <span className="text-muted">{shown.detail}</span>}
+          </div>
+        ) : shown?.status === "not_found" ? (
+          <p className="text-muted">
+            {"You're not in this week's membership report yet — that's fine. We'll link your membership automatically once you appear."}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -606,14 +703,6 @@ function LinksStep({
           {hasLink ? "That's enough to finish. Add more if you like." : "Add at least one link to continue."}
         </span>
       </div>
-      <Field label="Student ID" hint="Optional. Links your DUSA club membership.">
-        <TextInput
-          value={form.studentId}
-          onChange={(e) => set("studentId", e.target.value)}
-          placeholder="220123456"
-          inputMode="numeric"
-        />
-      </Field>
     </div>
   );
 }

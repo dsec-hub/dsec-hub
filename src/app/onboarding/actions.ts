@@ -10,11 +10,20 @@ import { apiEnv } from "@/lib/api-env";
 import { requireUser } from "@/lib/dal";
 import { ensurePersonForUser } from "@/lib/person-link";
 import { revalidateWebsite } from "@/lib/revalidate-website";
-import { getMedia } from "@/lib/workspace-queries";
+import { getMedia, getMemberByStudentId } from "@/lib/workspace-queries";
 
 export type OnboardingState = { error?: string; ok?: boolean } | undefined;
 
 const LINK_FIELDS = ["website", "discord", "instagram", "github", "linkedin"] as const;
+
+// A DUSA/Deakin student ID is numeric (commonly 9 digits). Kept lenient (6–12)
+// so unusual lengths still pass; the live roster lookup is the real check. The
+// wizard mirrors this exact pattern for its per-step gate.
+const STUDENT_ID_RE = /^\d{6,12}$/;
+
+function normaliseStudentId(raw: string | null | undefined): string {
+  return (raw ?? "").replace(/\D/g, "");
+}
 
 export type OnboardingProfile = {
   name: string;
@@ -87,10 +96,45 @@ export async function uploadOwnPhoto(
 }
 
 /**
+ * Result of a live DUSA-roster lookup for a typed student ID. `found` carries
+ * just enough to reassure the new member (status + a short faculty/campus line),
+ * never the matched person's name — committee can already see that on /members.
+ */
+export type MembershipCheck =
+  | { status: "found"; isCurrent: boolean; dusaMember: boolean; detail: string }
+  | { status: "not_found" }
+  | { status: "invalid" };
+
+/**
+ * Live, self-service membership check for the onboarding wizard's Membership
+ * step. Any signed-in member may look up a student ID against the imported DUSA
+ * roster (the same data committee browses on /members), so this needs no extra
+ * scope. It never blocks onboarding — a "not_found" simply means the new member
+ * hasn't landed in a weekly report yet.
+ */
+export async function checkMembership(studentId: string): Promise<MembershipCheck> {
+  await requireUser();
+  const id = normaliseStudentId(studentId);
+  if (!STUDENT_ID_RE.test(id)) return { status: "invalid" };
+
+  const member = await getMemberByStudentId(id);
+  if (!member) return { status: "not_found" };
+
+  const detail =
+    [member.faculty, member.campus, member.membershipType].filter(Boolean).join(" · ") || "";
+  return {
+    status: "found",
+    isCurrent: !!member.isCurrent,
+    dusaMember: !!member.dusaMember,
+    detail,
+  };
+}
+
+/**
  * Persist the collected profile, mark onboarding complete, and enter the app.
  * Required fields are validated here too (defense in depth — the wizard also
- * gates them): full name, a short bio, at least one link, and a profile photo.
- * Email and role stay as the invite assigned them and aren't edited here.
+ * gates them): full name, a short bio, a student ID, at least one link, and a
+ * profile photo. Email and role stay as the invite assigned them; not edited here.
  */
 export async function finishOnboarding(data: OnboardingProfile): Promise<OnboardingState> {
   const user = await requireUser();
@@ -100,6 +144,11 @@ export async function finishOnboarding(data: OnboardingProfile): Promise<Onboard
   const bio = data.bio?.trim();
   if (!name) return { error: "Please add your full name." };
   if (!bio) return { error: "Please add a short bio for the team page." };
+
+  const studentId = normaliseStudentId(data.studentId);
+  if (!STUDENT_ID_RE.test(studentId)) {
+    return { error: "Please add your student ID so we can verify your club membership." };
+  }
 
   const links = Object.fromEntries(
     LINK_FIELDS.map((k) => [k, (data[k] ?? "").trim()]),
@@ -117,7 +166,7 @@ export async function finishOnboarding(data: OnboardingProfile): Promise<Onboard
     .set({
       name,
       bio,
-      studentId: data.studentId?.trim() || null,
+      studentId,
       website: links.website || null,
       discord: links.discord || null,
       instagram: links.instagram || null,
