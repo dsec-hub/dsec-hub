@@ -72,6 +72,53 @@ export async function quickAddRelatedTask(
   revalidateTasks();
 }
 
+/**
+ * Tick / untick a task from its parent entity's detail page (event/project/
+ * sponsor). Authorised by the PARENT module's write — mirrors
+ * `quickAddRelatedTask`, since managing a parent's task list is part of managing
+ * the parent (and lets the affordance, which is gated on parent-write, never
+ * bounce). Sets the same status + completedAt as the board's "Done" move.
+ * Returns void: the card is toggled optimistically and a tick is self-reversible
+ * (just untick it), so there's no undo toast.
+ */
+export async function setRelatedTaskDone(
+  kind: TaskParentKind,
+  parentId: number,
+  taskId: number,
+  done: boolean,
+): Promise<void> {
+  const user = await requireWrite(PARENT_MODULE[kind]);
+  const now = new Date().toISOString();
+  await db
+    .update(tasks)
+    .set({ status: done ? "Done" : "To Do", completedAt: done ? now : null, updatedAt: now })
+    .where(eq(tasks.id, taskId));
+  await logMutation(user, "update", "task", taskId);
+  revalidatePath(`/${PARENT_MODULE[kind]}/${parentId}`);
+  revalidateTasks();
+}
+
+/**
+ * Hard-delete a task from its parent entity's detail page, returning an undo
+ * token so the Sonner toast can restore it. Authorised by the PARENT module's
+ * write (mirrors `quickAddRelatedTask`): the people who can add a task to an
+ * event/project/sponsor can remove it. The card is dropped optimistically in the
+ * UI while this runs in the background.
+ */
+export async function deleteRelatedTask(
+  kind: TaskParentKind,
+  parentId: number,
+  taskId: number,
+): Promise<FormState> {
+  const user = await requireWrite(PARENT_MODULE[kind]);
+  const undo = await snapshotForDelete("task", taskId);
+  await db.delete(tasks).where(eq(tasks.id, taskId));
+  await logMutation(user, "delete", "task", taskId);
+  revalidatePath(`/${PARENT_MODULE[kind]}/${parentId}`);
+  revalidateTasks();
+  return { ok: true, message: "Task deleted", undo };
+}
+
 function parseTask(fd: FormData) {
   return {
     title: str(fd, "title") ?? "",

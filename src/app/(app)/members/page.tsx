@@ -119,6 +119,7 @@ export default async function MembersPage({
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted">
                     <th className="px-5 py-2.5 font-medium">Member</th>
+                    <th className="px-5 py-2.5 font-medium">Email</th>
                     <th className="px-5 py-2.5 font-medium">Membership</th>
                     <th className="px-5 py-2.5 font-medium">Type</th>
                     <th className="px-5 py-2.5 text-right font-medium">Expires</th>
@@ -132,6 +133,18 @@ export default async function MembersPage({
                         <div className="mt-0.5 text-xs text-muted">
                           {[m.studentId, m.faculty, m.campus].filter(Boolean).join(" · ") || "—"}
                         </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        {m.email ? (
+                          <a
+                            href={`mailto:${m.email}`}
+                            className="text-accent hover:underline"
+                          >
+                            {m.email}
+                          </a>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         <Badge variant={m.dusaMember ? "accent" : "neutral"}>

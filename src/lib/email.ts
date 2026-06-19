@@ -2,6 +2,8 @@ import "server-only";
 
 import { headers } from "next/headers";
 
+import { renderEmail, emailButton, p, esc } from "@/lib/email-layout";
+
 /**
  * Resolve the app's public origin for building invite links.
  *
@@ -53,25 +55,37 @@ export async function sendInviteEmail({
     return { sent: false };
   }
 
-  const by = invitedBy ? ` by ${invitedBy}` : "";
-  const onCommittee = committee ? ` on the <strong>${committee}</strong> committee` : "";
-  const html = `
-    <div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:480px;margin:0 auto;color:#111">
-      <h2 style="font-size:18px;margin:0 0 12px">You've been invited to the DSEC Dashboard</h2>
-      <p style="font-size:14px;line-height:1.6;color:#444">
-        You've been invited${by} to join the DSEC exec dashboard with the
-        <strong>${roleName}</strong> role${onCommittee}. Click below to set your password and get started.
-      </p>
-      <p style="margin:24px 0">
-        <a href="${link}" style="background:#e91e63;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600">
-          Accept invite
-        </a>
-      </p>
-      <p style="font-size:12px;color:#888;line-height:1.6">
-        Or paste this link into your browser:<br>${link}<br><br>
+  const by = invitedBy ? ` by <strong style="color:#0a0a0c;">${esc(invitedBy)}</strong>` : "";
+  const onCommittee = committee
+    ? ` on the <strong style="color:#0a0a0c;">${esc(committee)}</strong> committee`
+    : "";
+  const html = renderEmail({
+    preview: `You've been invited to the DSEC committee dashboard as ${roleName}.`,
+    eyebrow: "You're invited",
+    heading: "Join the DSEC dashboard",
+    body: `
+      ${p(
+        `You've been invited${by} to join the DSEC exec dashboard with the <strong style="color:#0a0a0c;">${esc(
+          roleName,
+        )}</strong> role${onCommittee}. Set your password to get started.`,
+      )}
+      <div style="margin:28px 0;">${emailButton(link, "Accept invite")}</div>
+      <p style="margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8a8f94;">
+        Or paste this link into your browser:<br>
+        <a href="${link}" target="_blank" style="color:#c2185b;word-break:break-all;">${esc(link)}</a><br><br>
         This link expires in 7 days. If you weren't expecting this, you can ignore it.
-      </p>
-    </div>`;
+      </p>`,
+  });
+
+  const text = [
+    `You've been invited${invitedBy ? ` by ${invitedBy}` : ""} to join the DSEC exec dashboard`,
+    `with the ${roleName} role${committee ? ` on the ${committee} committee` : ""}.`,
+    ``,
+    `Accept your invite and set your password:`,
+    link,
+    ``,
+    `This link expires in 7 days. If you weren't expecting this, you can ignore it.`,
+  ].join("\n");
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -85,6 +99,7 @@ export async function sendInviteEmail({
         to,
         subject: "You've been invited to the DSEC Dashboard",
         html,
+        text,
       }),
     });
     if (!res.ok) {
