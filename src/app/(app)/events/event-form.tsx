@@ -16,6 +16,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/form";
+import { PeopleMultiSelect } from "@/components/people-multi-select";
 import { SubmitButton } from "@/components/submit-button";
 import { TimeField } from "@/components/time-field";
 import { buttonSecondary } from "@/components/ui";
@@ -80,6 +81,7 @@ export function EventForm({
   people,
   committees,
   event,
+  coOwnerIds = [],
   onSuccess,
   onCancel,
   redirectOnSuccess,
@@ -89,6 +91,8 @@ export function EventForm({
   people: Option[];
   committees: Option[];
   event?: EventRow;
+  /** Additional event owners beyond the primary lead (pre-selected on edit). */
+  coOwnerIds?: number[];
   onSuccess?: (result: FormState) => void;
   onCancel?: () => void;
   redirectOnSuccess?: string;
@@ -220,6 +224,16 @@ export function EventForm({
             ))}
           </SelectField>
         </Field>
+        <div className="sm:col-span-2">
+          <Field label="Co-leads" hint="Extra people running this event, beyond the lead.">
+            <PeopleMultiSelect
+              name="co_owner_ids"
+              people={people}
+              defaultSelected={coOwnerIds}
+              excludeId={e?.eventLeadId ?? null}
+            />
+          </Field>
+        </div>
         <Field label="Format">
           <SelectField name="format" defaultValue={e?.format ?? ""}>
             <option value="">—</option>

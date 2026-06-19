@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { events, finance } from "@/db/schema";
 import { requireWrite } from "@/lib/dal";
 import { bool, int, str, tierList } from "@/lib/form-data";
+import { coOwnerIdsOf, setEventOwners } from "@/lib/owners";
 import { DUSA_STATUSES } from "@/lib/options";
 import { apiEnv } from "@/lib/api-env";
 import { revalidateWebsite } from "@/lib/revalidate-website";
@@ -65,6 +66,7 @@ export async function createEvent(_prev: FormState, fd: FormData): Promise<FormS
   const values = parseEvent(fd);
   if (!values.name) return { error: "Event name is required." };
   const [row] = await db.insert(events).values(values).returning({ id: events.id });
+  if (row?.id) await setEventOwners(row.id, coOwnerIdsOf(fd), values.eventLeadId ?? null);
   await revalidateEvents();
   return { ok: true, message: "Event created", undo: createToken("event", row?.id), id: row?.id };
 }
@@ -82,6 +84,7 @@ export async function updateEvent(
     .update(events)
     .set({ ...values, updatedAt: new Date().toISOString() })
     .where(eq(events.id, id));
+  await setEventOwners(id, coOwnerIdsOf(fd), values.eventLeadId ?? null);
   await revalidateEvents();
   return { ok: true, message: "Event updated", undo };
 }

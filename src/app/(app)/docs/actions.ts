@@ -26,6 +26,7 @@ function parseDocument(fd: FormData) {
     relatedEventId: int(fd, "related_event_id"),
     relatedProjectId: int(fd, "related_project_id"),
     relatedMeetingId: int(fd, "related_meeting_id"),
+    relatedTaskId: int(fd, "related_task_id"),
   };
 }
 

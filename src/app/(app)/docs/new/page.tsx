@@ -7,6 +7,7 @@ import {
   getMeetingOptions,
   getPersonOptions,
   getProjectOptions,
+  getTaskOptions,
 } from "@/lib/workspace-queries";
 
 import { createDocument } from "../actions";
@@ -16,11 +17,12 @@ export default async function NewDocumentPage() {
   const me = await requireWrite("documents");
   const scope = committeeScopeOf(me);
 
-  const [people, events, projects, meetings, committeeOpts] = await Promise.all([
+  const [people, events, projects, meetings, tasks, committeeOpts] = await Promise.all([
     getPersonOptions(),
     getEventOptions(),
     getProjectOptions(),
     getMeetingOptions(scope),
+    getTaskOptions(),
     getCommitteeOptions(),
   ]);
 
@@ -41,6 +43,7 @@ export default async function NewDocumentPage() {
         events={events}
         projects={projects}
         meetings={meetings}
+        tasks={tasks}
         committees={committeeOpts.map((c) => c.name)}
         canChooseCommittee={scope.all}
         lockedCommittee={me.userCommittee}

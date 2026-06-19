@@ -13,6 +13,7 @@ import {
   getMeetingOptions,
   getPersonOptions,
   getProjectOptions,
+  getTaskOptions,
 } from "@/lib/workspace-queries";
 
 import { archiveDocument, deleteDocument, updateDocument } from "../../actions";
@@ -30,12 +31,13 @@ export default async function EditDocumentPage({
   if (Number.isNaN(documentId)) notFound();
 
   const scope = committeeScopeOf(me);
-  const [document, people, events, projects, meetings, committeeOpts] = await Promise.all([
+  const [document, people, events, projects, meetings, tasks, committeeOpts] = await Promise.all([
     getDocumentById(documentId, scope),
     getPersonOptions(),
     getEventOptions(),
     getProjectOptions(),
     getMeetingOptions(scope),
+    getTaskOptions(),
     getCommitteeOptions(),
   ]);
   if (!document) notFound();
@@ -79,6 +81,7 @@ export default async function EditDocumentPage({
         events={events}
         projects={projects}
         meetings={meetings}
+        tasks={tasks}
         committees={committeeOpts.map((c) => c.name)}
         canChooseCommittee={scope.all}
         lockedCommittee={me.userCommittee}

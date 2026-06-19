@@ -29,15 +29,19 @@ function addDaysISO(iso: string, days: number): string {
  * Instant on-assignment notice. Maps the assignee person → an active login user
  * and skips when there's no login or the assignee IS the actor (self-assignment
  * shouldn't ping you). Called from the task server actions via `after()`, so it
- * never blocks or breaks the mutation.
+ * never blocks or breaks the mutation — and from the internal notify-assignment
+ * route when a task is (re)assigned through dsec-api (REST/MCP), which passes
+ * `actorUserId: null` (no resolvable actor) so the assignee is always notified.
  */
 export async function notifyTaskAssigned(args: {
   taskId: number;
   assigneePersonId: number;
-  actorUserId: number;
+  actorUserId: number | null;
 }): Promise<void> {
   const userId = await userIdForPerson(args.assigneePersonId);
-  if (!userId || userId === args.actorUserId) return;
+  // No login for this person → nothing to notify. Skip self-assignment only when
+  // we actually know the actor; a null actor (API/MCP hand-off) always notifies.
+  if (!userId || (args.actorUserId !== null && userId === args.actorUserId)) return;
 
   const ctx = await getUserNotifyContext(userId);
   if (!ctx) return;
@@ -49,13 +53,17 @@ export async function notifyTaskAssigned(args: {
     .limit(1);
   if (!t) return;
 
+  // Resolve who assigned it — only when we know the actor. A null actor is an
+  // API/MCP hand-off with no resolvable user, so the message just omits the name.
   let actorName: string | null = null;
-  const [actor] = await db
-    .select({ name: appUser.name })
-    .from(appUser)
-    .where(eq(appUser.id, args.actorUserId))
-    .limit(1);
-  actorName = actor?.name ?? null;
+  if (args.actorUserId !== null) {
+    const [actor] = await db
+      .select({ name: appUser.name })
+      .from(appUser)
+      .where(eq(appUser.id, args.actorUserId))
+      .limit(1);
+    actorName = actor?.name ?? null;
+  }
 
   await dispatchNotification({
     userId,

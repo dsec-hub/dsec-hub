@@ -7,6 +7,7 @@ import { useActionState, useEffect } from "react";
 import { Field, FormError, SelectField, TextArea, TextInput } from "@/components/form";
 import { CommitteeSelect } from "@/components/committee-select";
 import { DateField } from "@/components/date-field";
+import { PeopleMultiSelect } from "@/components/people-multi-select";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonSecondary } from "@/components/ui";
 import { useUndoToast } from "@/lib/use-undo-toast";
@@ -26,6 +27,7 @@ export function TaskForm({
   events,
   projects,
   committees,
+  coOwnerIds = [],
   onSuccess,
   onCancel,
   redirectOnSuccess,
@@ -38,6 +40,8 @@ export function TaskForm({
   events: Option[];
   projects: Option[];
   committees: Option[];
+  /** Additional owners beyond the primary assignee (pre-selected on edit). */
+  coOwnerIds?: number[];
   onSuccess?: () => void;
   onCancel?: () => void;
   redirectOnSuccess?: string;
@@ -132,6 +136,15 @@ export function TaskForm({
             </SelectField>
           </Field>
         </div>
+
+        <Field label="Co-owners" hint="Extra people who share this task, beyond the assignee.">
+          <PeopleMultiSelect
+            name="co_owner_ids"
+            people={people}
+            defaultSelected={coOwnerIds}
+            excludeId={t?.assigneeId ?? null}
+          />
+        </Field>
 
         <Field label="Description">
           <TextArea name="description" defaultValue={t?.description ?? ""} />

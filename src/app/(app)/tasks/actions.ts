@@ -11,6 +11,7 @@ import { assertNotPreviewing, requireModule, requireWrite, type CurrentUser } fr
 import { canManageRelatedTasks, canWrite, canWriteTask } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
 import { notifyTaskAssigned } from "@/lib/notifications/events";
+import { coOwnerIdsOf, getTaskOwnerIds, setTaskOwners } from "@/lib/owners";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 import { logMutation } from "@/lib/usage";
@@ -190,6 +191,14 @@ export async function createTask(_prev: FormState, fd: FormData): Promise<FormSt
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
   notifyAssignmentAfter(row?.id, values.assigneeId, user.id);
+  // Co-owners are a management action — only full writers may add others.
+  if (row?.id && fullWrite) {
+    const coOwnerIds = coOwnerIdsOf(fd);
+    await setTaskOwners(row.id, coOwnerIds, values.assigneeId ?? null);
+    for (const pid of coOwnerIds) {
+      if (pid !== values.assigneeId) notifyAssignmentAfter(row.id, pid, user.id);
+    }
+  }
   revalidateTasks();
   return { ok: true, message: "Task created", undo: createToken("task", row?.id) };
 }
@@ -219,6 +228,17 @@ export async function updateTask(
   await logMutation(user, "update", "task", id);
   if (values.assigneeId && values.assigneeId !== priorTask?.assigneeId) {
     notifyAssignmentAfter(id, values.assigneeId, user.id);
+  }
+  // Co-owners are management-only; members editing their own task can't change them.
+  if (fullWrite) {
+    const coOwnerIds = coOwnerIdsOf(fd);
+    const prior = await getTaskOwnerIds(id);
+    await setTaskOwners(id, coOwnerIds, values.assigneeId ?? null);
+    for (const pid of coOwnerIds) {
+      if (pid !== values.assigneeId && !prior.includes(pid)) {
+        notifyAssignmentAfter(id, pid, user.id);
+      }
+    }
   }
   revalidateTasks();
   return { ok: true, message: "Task updated", undo };

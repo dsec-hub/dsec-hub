@@ -24,7 +24,9 @@ import {
   sponsorContacts,
   sponsors,
   taskBoards,
+  taskOwners,
   tasks,
+  projectOwners,
   usageEvents,
 } from "@/db/workspace-schema";
 import { todayISO } from "@/lib/format";
@@ -291,8 +293,13 @@ export async function getTasksDueSoon(days = 14, limit = 12) {
     .limit(limit);
 }
 
-/** Open tasks assigned to a specific person, soonest-due first (My Work). */
+/** Open tasks owned by a person — as the primary assignee OR a co-owner —
+ * soonest-due first (My Work). */
 export async function getMyOpenTasks(assigneeId: number, limit = 14) {
+  const coOwned = db
+    .select({ id: taskOwners.taskId })
+    .from(taskOwners)
+    .where(eq(taskOwners.personId, assigneeId));
   return db
     .select({
       id: tasks.id,
@@ -303,7 +310,13 @@ export async function getMyOpenTasks(assigneeId: number, limit = 14) {
       committee: tasks.committee,
     })
     .from(tasks)
-    .where(and(eq(tasks.archived, false), eq(tasks.assigneeId, assigneeId), isNull(tasks.completedAt)))
+    .where(
+      and(
+        eq(tasks.archived, false),
+        isNull(tasks.completedAt),
+        or(eq(tasks.assigneeId, assigneeId), inArray(tasks.id, coOwned)),
+      ),
+    )
     .orderBy(sql`${tasks.dueDate} is null`, asc(tasks.dueDate), asc(tasks.id))
     .limit(limit);
 }
@@ -377,8 +390,15 @@ export async function getCommitteeHealth(): Promise<CommitteeHealthRow[]> {
 export async function getProjects(opts: { publicOnly?: boolean; leadId?: number } = {}) {
   const conds = [eq(projects.archived, false)];
   if (opts.publicOnly) conds.push(eq(projects.isPublic, true));
-  // Scoped (non-module) access: a lead sees only the projects they lead.
-  if (opts.leadId != null) conds.push(eq(projects.leadId, opts.leadId));
+  // Scoped (non-module) access: a lead sees the projects they lead OR co-own.
+  if (opts.leadId != null) {
+    const coLed = db
+      .select({ id: projectOwners.projectId })
+      .from(projectOwners)
+      .where(eq(projectOwners.personId, opts.leadId));
+    const scope = or(eq(projects.leadId, opts.leadId), inArray(projects.id, coLed));
+    if (scope) conds.push(scope);
+  }
   return db
     .select({
       id: projects.id, name: projects.name, slug: projects.slug, summary: projects.summary,
@@ -792,6 +812,25 @@ export async function getDocuments(scope: CommitteeScope, opts: { type?: string 
     .limit(100);
 }
 
+/** Documents linked to a task (via document.related_task_id). Committee-scoped
+ * the same way the Docs list is, so a viewer never sees out-of-scope docs on a
+ * task. Surfaced as a "Linked documents" section on the task edit page. */
+export type TaskDocumentRow = Awaited<ReturnType<typeof getTaskDocuments>>[number];
+
+export async function getTaskDocuments(taskId: number, scope: CommitteeScope) {
+  const conds = [eq(documents.relatedTaskId, taskId), eq(documents.archived, false)];
+  const cc = committeeCond(documents.committee, scope);
+  if (cc) conds.push(cc);
+  return db
+    .select({
+      id: documents.id, title: documents.title, type: documents.type,
+      status: documents.status, updatedAt: documents.updatedAt,
+    })
+    .from(documents)
+    .where(and(...conds))
+    .orderBy(desc(documents.updatedAt));
+}
+
 // ===========================================================================
 // Sponsors (pipeline)
 // ===========================================================================
@@ -1026,4 +1065,10 @@ export async function getMeetingOptions(scope: CommitteeScope): Promise<Option[]
   if (cc) conds.push(cc);
   return db.select({ id: meetings.id, name: meetings.title }).from(meetings)
     .where(and(...conds)).orderBy(desc(meetings.meetingDate));
+}
+/** Tasks for the doc "Related task" picker — recent first, capped (tasks are
+ * the most numerous entity, so an unbounded <select> would be unwieldy). */
+export async function getTaskOptions(): Promise<Option[]> {
+  return db.select({ id: tasks.id, name: tasks.title }).from(tasks)
+    .where(eq(tasks.archived, false)).orderBy(desc(tasks.updatedAt)).limit(200);
 }

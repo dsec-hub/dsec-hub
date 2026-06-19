@@ -7,6 +7,7 @@ import { PageHeader, buttonGhost } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
 import { cn } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
+import { getProjectOwners } from "@/lib/owners";
 import { getEventOptions, getMedia, getPersonOptions, getProjectById } from "@/lib/workspace-queries";
 
 import { archiveProject, deleteProject, setProjectPublished, updateProject } from "../../actions";
@@ -23,11 +24,12 @@ export default async function EditProjectPage({
   const projectId = Number(id);
   if (Number.isNaN(projectId)) notFound();
 
-  const [project, people, events, media] = await Promise.all([
+  const [project, people, events, media, coOwners] = await Promise.all([
     getProjectById(projectId),
     getPersonOptions(),
     getEventOptions(),
     getMedia("project", projectId),
+    getProjectOwners(projectId),
   ]);
   if (!project) notFound();
 
@@ -63,6 +65,7 @@ export default async function EditProjectPage({
         project={project}
         people={people}
         events={events}
+        coOwnerIds={coOwners.map((o) => o.id)}
         redirectOnSuccess="/projects"
         canWrite={writable}
       />

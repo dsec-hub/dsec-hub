@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { projects } from "@/db/workspace-schema";
 import { requireWrite } from "@/lib/dal";
 import { bool, int, str } from "@/lib/form-data";
+import { coOwnerIdsOf, setProjectOwners } from "@/lib/owners";
 import { revalidateWebsite } from "@/lib/revalidate-website";
 import { logMutation } from "@/lib/usage";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
@@ -70,6 +71,7 @@ export async function createProject(_prev: FormState, fd: FormData): Promise<For
     .insert(projects)
     .values({ ...values, slug })
     .returning({ id: projects.id });
+  if (row?.id) await setProjectOwners(row.id, coOwnerIdsOf(fd), values.leadId ?? null);
   await logMutation(user, "create", "project", row?.id);
   await revalidateProjects();
   return { ok: true, message: "Project created", undo: createToken("project", row?.id), id: row?.id };
@@ -88,6 +90,7 @@ export async function updateProject(
     .update(projects)
     .set({ ...values, updatedAt: new Date().toISOString() })
     .where(eq(projects.id, id));
+  await setProjectOwners(id, coOwnerIdsOf(fd), values.leadId ?? null);
   await logMutation(user, "update", "project", id);
   await revalidateProjects();
   return { ok: true, message: "Project updated", undo };

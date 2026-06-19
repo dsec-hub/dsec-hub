@@ -12,6 +12,7 @@ import { requireModule } from "@/lib/dal";
 import { formatAUD, formatDate, formatTime, initials, todayISO } from "@/lib/format";
 import { dusaVariant, eventStatusVariant } from "@/lib/options";
 import { getEventById, getPeopleOptions } from "@/lib/queries";
+import { getEventOwners } from "@/lib/owners";
 import { canManageRelatedTasks, canWrite } from "@/lib/rbac";
 import { fetchReviewSummary } from "@/lib/reviews";
 import {
@@ -39,7 +40,7 @@ export default async function EventDetailPage({
   const eventId = Number(id);
   if (Number.isNaN(eventId)) notFound();
 
-  const [event, people, committees, media, relatedTasks, speakers, partners, connections] =
+  const [event, people, committees, media, relatedTasks, speakers, partners, connections, coLeads] =
     await Promise.all([
       getEventById(eventId),
       getPeopleOptions(),
@@ -49,12 +50,15 @@ export default async function EventDetailPage({
       getEventSpeakers(eventId).catch(() => []),
       getEventPartners(eventId).catch(() => []),
       getEventConnections(eventId).catch(() => []),
+      getEventOwners(eventId).catch(() => []),
     ]);
   if (!event) notFound();
 
   const reviewSummary = event.reviewFormId ? await fetchReviewSummary(eventId) : null;
 
   const leadName = people.find((p) => p.id === event.eventLeadId)?.name ?? null;
+  // Primary lead first, then co-leads (event_owner). Label flips to plural.
+  const allLeadNames = [leadName, ...coLeads.map((o) => o.name)].filter(Boolean) as string[];
   const committeeColor = committees.find((c) => c.name === event.committee)?.color;
 
   const dateLabel = event.startDate
@@ -122,7 +126,10 @@ export default async function EventDetailPage({
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Meta label="Date" value={dateLabel} />
         <Meta label="Time" value={timeLabel} />
-        <Meta label="Lead" value={leadName ?? "—"} />
+        <Meta
+          label={allLeadNames.length > 1 ? "Leads" : "Lead"}
+          value={allLeadNames.length ? allLeadNames.join(", ") : "—"}
+        />
         <Meta
           label="Committee"
           value={

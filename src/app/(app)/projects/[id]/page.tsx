@@ -10,6 +10,7 @@ import { canAccess, canManageRelatedTasks } from "@/lib/rbac";
 import { formatDate } from "@/lib/format";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { getEventById } from "@/lib/queries";
+import { getProjectOwners } from "@/lib/owners";
 import { requireProjectView } from "@/lib/scope";
 import { projectStatusVariant } from "@/lib/workspace-options";
 import { getPersonOptions, getProjectById, getRelatedTasks } from "@/lib/workspace-queries";
@@ -37,12 +38,15 @@ export default async function ProjectDetailPage({
   const canEditTasks =
     canAccess(me.modules, "projects") &&
     canManageRelatedTasks(me.modules, me.writeModules, "projects");
-  const [people, relatedTasks, committees] = await Promise.all([
+  const [people, relatedTasks, committees, coLeads] = await Promise.all([
     getPersonOptions(),
     getRelatedTasks("project", pid),
     getCommitteeOptions(),
+    getProjectOwners(pid),
   ]);
   const lead = people.find((p) => p.id === project.leadId)?.name;
+  // Primary lead first, then co-leads (project_owner). Label flips to plural.
+  const allLeadNames = [lead, ...coLeads.map((o) => o.name)].filter(Boolean) as string[];
   // Cross-link: the event this project came out of (if any).
   const relatedEvent = project.relatedEventId ? await getEventById(project.relatedEventId) : null;
 
@@ -97,7 +101,10 @@ export default async function ProjectDetailPage({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Meta label="Lead" value={lead ?? "—"} />
+        <Meta
+          label={allLeadNames.length > 1 ? "Leads" : "Lead"}
+          value={allLeadNames.length ? allLeadNames.join(", ") : "—"}
+        />
         <Meta label="Timeline" value={`${formatDate(project.startDate)} → ${formatDate(project.endDate)}`} />
         <Meta label="Repository" value={project.repoUrl ? <ExtLink href={project.repoUrl} /> : "—"} />
         <Meta label="Demo" value={project.demoUrl ? <ExtLink href={project.demoUrl} /> : "—"} />

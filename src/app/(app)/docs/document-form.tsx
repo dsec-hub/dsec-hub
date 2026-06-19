@@ -23,6 +23,7 @@ export function DocumentForm({
   events,
   projects,
   meetings,
+  tasks,
   committees,
   canChooseCommittee,
   lockedCommittee,
@@ -36,6 +37,7 @@ export function DocumentForm({
   events: Option[];
   projects: Option[];
   meetings: Option[];
+  tasks: Option[];
   /** Committee names for the visibility picker (only used when canChooseCommittee). */
   committees: string[];
   /** "all"-scope users pick any committee/club-wide; "own"-scope users are locked. */
@@ -147,6 +149,19 @@ export function DocumentForm({
               {meetings.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+          <Field label="Related task" hint="Attach this doc to a task">
+            <SelectField
+              name="related_task_id"
+              defaultValue={d?.relatedTaskId ? String(d.relatedTaskId) : ""}
+            >
+              <option value="">—</option>
+              {tasks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </SelectField>

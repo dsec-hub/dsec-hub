@@ -162,6 +162,33 @@ export const tasks = pgTable("task", {
   archived: boolean().default(false).notNull(),
 });
 
+// --- co-owners (multi-assignee / multi-lead) -------------------------------
+// Additional owners beyond each entity's single PRIMARY owner
+// (task.assigneeId / events.eventLeadId / project.leadId). One row per
+// (entity, person); the primary lives on the entity row, not here. Owned by
+// dsec-api (Alembic migration b6e9c2a4f1d7).
+
+export const taskOwners = pgTable("task_owner", {
+  id: serial().primaryKey(),
+  taskId: integer("task_id").notNull(),
+  personId: integer("person_id").notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+});
+
+export const eventOwners = pgTable("event_owner", {
+  id: serial().primaryKey(),
+  eventId: integer("event_id").notNull(),
+  personId: integer("person_id").notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+});
+
+export const projectOwners = pgTable("project_owner", {
+  id: serial().primaryKey(),
+  projectId: integer("project_id").notNull(),
+  personId: integer("person_id").notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+});
+
 export const meetings = pgTable("meeting", {
   id: serial().primaryKey(),
   title: varchar({ length: 512 }).notNull(),
@@ -202,6 +229,7 @@ export const documents = pgTable("document", {
   relatedSponsorId: integer("related_sponsor_id"),
   relatedProjectId: integer("related_project_id"),
   relatedMeetingId: integer("related_meeting_id"),
+  relatedTaskId: integer("related_task_id"),
   createdBy: varchar("created_by", { length: 256 }),
   createdAt: ts("created_at").defaultNow().notNull(),
   updatedAt: ts("updated_at").defaultNow().notNull(),

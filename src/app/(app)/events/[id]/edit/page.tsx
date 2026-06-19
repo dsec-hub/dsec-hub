@@ -8,6 +8,7 @@ import { getCommitteeOptions } from "@/lib/committee-queries";
 import { requireModule } from "@/lib/dal";
 import { cn } from "@/lib/format";
 import { getEventById, getPeopleOptions, getSponsorOptions } from "@/lib/queries";
+import { getEventOwners } from "@/lib/owners";
 import { canWrite } from "@/lib/rbac";
 import { fetchReviewSummary } from "@/lib/reviews";
 import {
@@ -51,6 +52,7 @@ export default async function EditEventPage({
     eventPartners,
     eventOptions,
     eventConnections,
+    coOwners,
   ] = await Promise.all([
     getEventById(eventId),
     getPeopleOptions(),
@@ -63,6 +65,7 @@ export default async function EditEventPage({
     getEventPartners(eventId).catch(() => []),
     getEventOptions(),
     getEventConnections(eventId).catch(() => []),
+    getEventOwners(eventId).catch(() => []),
   ]);
   if (!event) notFound();
 
@@ -111,6 +114,7 @@ export default async function EditEventPage({
         people={people}
         committees={committees}
         event={event}
+        coOwnerIds={coOwners.map((o) => o.id)}
         redirectOnSuccess="/events"
         canWrite={writable}
       />

@@ -12,6 +12,7 @@ import {
   TextArea,
   TextInput,
 } from "@/components/form";
+import { PeopleMultiSelect } from "@/components/people-multi-select";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonSecondary } from "@/components/ui";
 import { useUndoToast } from "@/lib/use-undo-toast";
@@ -26,6 +27,7 @@ export function ProjectForm({
   project,
   people,
   events,
+  coOwnerIds = [],
   onSuccess,
   onCancel,
   redirectOnSuccess,
@@ -35,6 +37,8 @@ export function ProjectForm({
   project?: ProjectRow;
   people: Option[];
   events: Option[];
+  /** Additional project owners beyond the primary lead (pre-selected on edit). */
+  coOwnerIds?: number[];
   onSuccess?: (result: FormState) => void;
   onCancel?: () => void;
   redirectOnSuccess?: string;
@@ -85,6 +89,16 @@ export function ProjectForm({
             ))}
           </SelectField>
         </Field>
+        <div className="sm:col-span-2">
+          <Field label="Co-leads" hint="Extra people working on this project, beyond the lead.">
+            <PeopleMultiSelect
+              name="co_owner_ids"
+              people={people}
+              defaultSelected={coOwnerIds}
+              excludeId={p?.leadId ?? null}
+            />
+          </Field>
+        </div>
       </div>
 
       <Field label="Summary">
