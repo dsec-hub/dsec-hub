@@ -6,6 +6,7 @@ import type { CommitteeScope } from "@/lib/scope";
 import { formatAUD, formatDate, todayISO } from "@/lib/format";
 import {
   getCommitteeHealth,
+  getDocuments,
   getEventBudgets,
   getEventOptions,
   getExpenseBreakdown,
@@ -13,9 +14,13 @@ import {
   getMemberStats,
   getMyOpenTasks,
   getOpenActionItems,
+  getPartners,
+  getProjects,
+  getProjectStats,
   getSponsorPipeline,
   getTasksDueSoon,
   getUpcomingEvents,
+  getUpcomingMeetings,
 } from "@/lib/workspace-queries";
 
 import { setEventBudget } from "./budget-actions";
@@ -368,6 +373,144 @@ export async function SponsorPipelineSection() {
                 </>
               }
               right={<Badge variant="accent">{s.stage ?? "—"}</Badge>}
+            />
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+/* ── Active projects ─────────────────────────────────────────────────────── */
+
+export async function ActiveProjectsSection() {
+  const [projects, stats] = await Promise.all([getProjects(), getProjectStats()]);
+  const active = projects.filter((p) => p.status !== "Completed" && p.status !== "Showcased").slice(0, 6);
+  return (
+    <SectionCard
+      title="Active projects"
+      action={moreLink("/projects", `${stats.shipped} shipped →`)}
+    >
+      {active.length === 0 ? (
+        <EmptyState>No projects in flight right now.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-border">
+          {active.map((p) => (
+            <ListRow
+              key={p.id}
+              href={`/projects/${p.id}`}
+              left={
+                <>
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {p.leadName ? `Lead: ${p.leadName}` : "No lead"}
+                    {p.category ? ` · ${p.category}` : ""}
+                  </div>
+                </>
+              }
+              right={<Badge variant="neutral">{p.status ?? "—"}</Badge>}
+            />
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+/* ── Upcoming meetings ───────────────────────────────────────────────────── */
+
+export async function UpcomingMeetingsSection({ scope }: { scope: CommitteeScope }) {
+  const meetings = await getUpcomingMeetings(scope, 6);
+  return (
+    <SectionCard title="Upcoming meetings" action={moreLink("/meetings", "All →")}>
+      {meetings.length === 0 ? (
+        <EmptyState>No meetings scheduled.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-border">
+          {meetings.map((m) => (
+            <ListRow
+              key={m.id}
+              href={`/meetings/${m.id}`}
+              left={
+                <>
+                  <div className="truncate text-sm font-medium">{m.title}</div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {m.committee ?? "Club-wide"}
+                    {m.location ? ` · ${m.location}` : ""}
+                  </div>
+                </>
+              }
+              right={
+                <span className="text-xs tabular-nums text-muted">
+                  {m.meetingDate ? formatDate(m.meetingDate) : "TBC"}
+                </span>
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+/* ── Recent documents ────────────────────────────────────────────────────── */
+
+export async function RecentDocumentsSection({ scope }: { scope: CommitteeScope }) {
+  const docs = (await getDocuments(scope)).slice(0, 7);
+  return (
+    <SectionCard title="Recent documents" action={moreLink("/docs", "All →")}>
+      {docs.length === 0 ? (
+        <EmptyState>No documents yet.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-border">
+          {docs.map((d) => (
+            <ListRow
+              key={d.id}
+              href={`/docs/${d.id}`}
+              left={
+                <>
+                  <div className="truncate text-sm font-medium">{d.title}</div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {d.type ?? "Doc"}
+                    {d.committee ? ` · ${d.committee}` : ""}
+                  </div>
+                </>
+              }
+              right={d.status ? <Badge variant="neutral">{d.status}</Badge> : null}
+            />
+          ))}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+/* ── Partner orgs ────────────────────────────────────────────────────────── */
+
+export async function PartnersSection() {
+  const partners = await getPartners();
+  const top = partners.slice(0, 6);
+  return (
+    <SectionCard title="Partner orgs" action={moreLink("/partners", "All →")}>
+      {top.length === 0 ? (
+        <EmptyState>No partner organisations yet.</EmptyState>
+      ) : (
+        <ul className="divide-y divide-border">
+          {top.map((p) => (
+            <ListRow
+              key={p.id}
+              href={`/partners/${p.id}`}
+              left={
+                <>
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  {p.website ? (
+                    <div className="mt-0.5 truncate text-xs text-muted">
+                      {p.website.replace(/^https?:\/\//, "")}
+                    </div>
+                  ) : null}
+                </>
+              }
+              right={p.showOnWebsite ? <Badge variant="accent">On website</Badge> : null}
             />
           ))}
         </ul>

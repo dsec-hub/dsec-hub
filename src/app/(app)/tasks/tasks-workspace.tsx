@@ -142,6 +142,7 @@ export function TasksWorkspace({
         onMode={(m) => patch({ mode: m })}
         onClear={() => patch({ filter: {} })}
         options={options}
+        fullWrite={fullWrite}
       />
 
       <p className="text-xs text-muted">

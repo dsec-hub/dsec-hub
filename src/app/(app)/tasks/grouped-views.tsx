@@ -1,16 +1,70 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 
+import { Icons } from "@/components/icons";
 import { Badge, EmptyState, buttonGhost } from "@/components/ui";
 import { cn } from "@/lib/format";
+import { showUndoToast } from "@/lib/use-undo-toast";
 import { priorityVariant } from "@/lib/workspace-options";
 import type { TaskGroup } from "@/lib/task-view-helpers";
 import type { TaskGroupBy, TaskRow } from "@/lib/task-view-types";
 
-import { moveTaskTo, quickAddTask, reassignTask } from "./actions";
+import { deleteTask, moveTaskTo, quickAddTask, reassignTask } from "./actions";
 import { MoveControl } from "./move-control";
+
+/**
+ * A local, mutable copy of the server-provided groups that re-syncs whenever the
+ * server data changes. Lets a view optimistically drop a card on delete while
+ * still reconciling against the next server render — including an undo that
+ * restores the row (the card reappears once the server data comes back).
+ */
+function useLocalGroups(initial: TaskGroup[]) {
+  const [groups, setGroups] = useState<TaskGroup[]>(initial);
+  const sig = useMemo(
+    () => initial.map((g) => `${g.key}:${g.tasks.map((t) => t.id).join(",")}`).join("|"),
+    [initial],
+  );
+  const [prevSig, setPrevSig] = useState(sig);
+  if (sig !== prevSig) {
+    setPrevSig(sig);
+    setGroups(initial);
+  }
+  return [groups, setGroups] as const;
+}
+
+/**
+ * Quick-delete affordance on a task card. Removes the card from view immediately
+ * (via onRemoved), fires the delete in the background, and surfaces a Sonner
+ * "Undo" toast — undoing restores the row server-side and refreshes. Full-write
+ * only; hard delete is a management action.
+ */
+function DeleteCardButton({ taskId, onRemoved }: { taskId: number; onRemoved: () => void }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-label="Delete task"
+      title="Delete task"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onRemoved();
+        start(async () => {
+          const res = await deleteTask(taskId);
+          showUndoToast(res, () => router.refresh());
+        });
+      }}
+      className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted opacity-60 transition hover:bg-elevated hover:text-danger hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+    >
+      <Icons.close className="size-3.5" />
+    </button>
+  );
+}
 
 const PRIORITY_DOT: Record<string, string> = {
   Urgent: "bg-danger",
@@ -97,6 +151,10 @@ export function GroupedBoard({
     setGroups(initial);
   }
 
+  function removeCard(id: number) {
+    setGroups((gs) => gs.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== id) })));
+  }
+
   function drop(targetKey: string) {
     const id = dragId;
     setOverKey(null);
@@ -161,7 +219,7 @@ export function GroupedBoard({
                     setOverKey(null);
                   }}
                   className={cn(
-                    "rounded-xl border border-border bg-surface p-3 transition-opacity",
+                    "group rounded-xl border border-border bg-surface p-3 transition-opacity",
                     draggable && "cursor-grab active:cursor-grabbing",
                     dragId === t.id && "opacity-40",
                   )}
@@ -176,6 +234,7 @@ export function GroupedBoard({
                     >
                       {t.title}
                     </Link>
+                    {fullWrite && <DeleteCardButton taskId={t.id} onRemoved={() => removeCard(t.id)} />}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                     {t.committee && <span className="truncate">{t.committee}</span>}
@@ -262,7 +321,7 @@ function QuickAdd({
 // =============================================================================
 
 export function GroupedList({
-  groups,
+  groups: initial,
   statuses,
   fullWrite,
   personId,
@@ -274,6 +333,9 @@ export function GroupedList({
   personId: number | null;
   ungrouped: boolean;
 }) {
+  const [groups, setGroups] = useLocalGroups(initial);
+  const removeCard = (id: number) =>
+    setGroups((gs) => gs.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== id) })));
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
   if (total === 0) {
     return <EmptyState>No tasks match this view. Adjust the filters, or add one from a board.</EmptyState>;
@@ -294,7 +356,7 @@ export function GroupedList({
             {g.tasks.map((t) => {
               const writable = canWriteRow(t, fullWrite, personId);
               return (
-                <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <li key={t.id} className="group flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">
                     <Link
                       href={`/tasks/${t.id}/edit`}
@@ -314,6 +376,7 @@ export function GroupedList({
                         Edit
                       </Link>
                     )}
+                    {fullWrite && <DeleteCardButton taskId={t.id} onRemoved={() => removeCard(t.id)} />}
                   </div>
                 </li>
               );

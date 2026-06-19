@@ -19,9 +19,11 @@ export async function findValidInvite(rawToken: string) {
     .select({
       id: appInvite.id,
       email: appInvite.email,
+      name: appInvite.name,
       roleId: appInvite.roleId,
       roleName: appRole.name,
       committee: appInvite.committee,
+      roleTitle: appInvite.roleTitle,
     })
     .from(appInvite)
     .leftJoin(appRole, eq(appInvite.roleId, appRole.id))
@@ -99,6 +101,7 @@ export async function acceptInvite(
     email: invite.email,
     name,
     committee: invite.committee,
+    roleTitle: invite.roleTitle,
   });
 
   await db

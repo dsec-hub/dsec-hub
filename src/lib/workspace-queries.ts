@@ -737,6 +737,24 @@ export async function getMeetings(scope: CommitteeScope, limit = 50) {
     .limit(limit);
 }
 
+/** The next scheduled meetings (today onward), committee-scoped, soonest first.
+ * Powers the dashboard "Upcoming meetings" section. */
+export async function getUpcomingMeetings(scope: CommitteeScope, limit = 6) {
+  const today = todayISO();
+  const conds = [eq(meetings.archived, false), gte(meetings.meetingDate, today)];
+  const cc = committeeCond(meetings.committee, scope);
+  if (cc) conds.push(cc);
+  return db
+    .select({
+      id: meetings.id, title: meetings.title, type: meetings.type,
+      committee: meetings.committee, meetingDate: meetings.meetingDate, location: meetings.location,
+    })
+    .from(meetings)
+    .where(and(...conds))
+    .orderBy(asc(meetings.meetingDate))
+    .limit(limit);
+}
+
 export async function getOpenActionItems(scope: CommitteeScope, limit = 10) {
   const conds = [eq(meetings.archived, false), sql`${meetings.actionItems} is not null`];
   const cc = committeeCond(meetings.committee, scope);

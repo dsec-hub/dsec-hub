@@ -4,6 +4,7 @@ import { ensurePersonForUser } from "@/lib/person-link";
 import { getPersonById } from "@/lib/queries";
 import { getMemberByStudentId } from "@/lib/workspace-queries";
 
+import { ChangeEmailForm } from "../change-email-form";
 import { ProfileForm } from "../profile-form";
 
 export default async function ProfileSettingsPage() {
@@ -56,8 +57,9 @@ export default async function ProfileSettingsPage() {
         </SectionCard>
       </div>
 
-      <div className="max-w-2xl">
-        <ProfileForm email={user.email} person={person} />
+      <div className="max-w-2xl space-y-6">
+        <ProfileForm person={person} />
+        <ChangeEmailForm currentEmail={user.email} />
       </div>
     </>
   );

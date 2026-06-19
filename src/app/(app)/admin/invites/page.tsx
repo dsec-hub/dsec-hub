@@ -56,9 +56,12 @@ export default async function InvitesPage() {
                   className="flex items-center justify-between gap-4 px-5 py-3.5"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{inv.email}</div>
+                    <div className="truncate text-sm font-medium">
+                      {inv.name ? `${inv.name} · ${inv.email}` : inv.email}
+                    </div>
                     <div className="truncate text-xs text-muted">
                       {inv.roleName ?? "—"}
+                      {inv.roleTitle ? ` · ${inv.roleTitle}` : ""}
                       {inv.committee ? ` · ${inv.committee}` : ""} · invited{" "}
                       {formatDate(inv.createdAt)}
                       {inv.status === "pending" && !expired

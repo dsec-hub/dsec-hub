@@ -8,7 +8,7 @@ import { useActionToast } from "@/lib/use-action-toast";
 import type { PersonRow } from "@/lib/queries";
 import { updateProfile } from "./actions";
 
-export function ProfileForm({ email, person }: { email: string; person: PersonRow }) {
+export function ProfileForm({ person }: { person: PersonRow }) {
   const [state, formAction] = useActionState(updateProfile, undefined);
   useActionToast(state);
   const p = person;
@@ -22,15 +22,6 @@ export function ProfileForm({ email, person }: { email: string; person: PersonRo
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Full name">
             <TextInput name="name" required defaultValue={p.name ?? ""} autoComplete="name" />
-          </Field>
-          <Field label="Email">
-            <TextInput
-              name="email"
-              type="email"
-              required
-              defaultValue={email}
-              autoComplete="email"
-            />
           </Field>
           <Field label="Student ID">
             <TextInput

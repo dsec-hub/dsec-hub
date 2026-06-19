@@ -9,7 +9,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { buttonSecondary } from "@/components/ui";
 import { cn } from "@/lib/format";
 import { ASSIGNABLE_MODULES, MODULES, MODULE_KEYS, levelFor, type AccessLevel } from "@/lib/rbac";
-import { CANONICAL_SECTIONS, normalizeViewConfig } from "@/lib/dashboard-config";
+import { CANONICAL_SECTIONS, getRolePersona, normalizeViewConfig } from "@/lib/dashboard-config";
 import { BUILT_IN_VIEW_KEYS, type BuiltInViewKey } from "@/lib/task-view-types";
 import { useUndoToast } from "@/lib/use-undo-toast";
 import type { RoleRow } from "@/lib/admin-queries";
@@ -81,6 +81,7 @@ export function RoleForm({
   const landingValue = landingOptions.some((o) => o.value === landing) ? landing : "/dashboard";
 
   const tasksAccessible = moduleAccessible("tasks");
+  const persona = getRolePersona(role?.name);
 
   return (
     <form action={formAction} className="max-w-2xl space-y-6">
@@ -133,6 +134,15 @@ export function RoleForm({
             toggles above. Options follow the modules you grant.
           </p>
         </div>
+
+        {persona && (
+          <div className="rounded-md border border-accent/25 bg-accent/5 px-3 py-2.5">
+            <div className="text-xs font-medium text-foreground">
+              Persona · {persona.archetype}
+            </div>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted">{persona.oneLiner}</p>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Lands on" hint="Where this role goes after signing in.">

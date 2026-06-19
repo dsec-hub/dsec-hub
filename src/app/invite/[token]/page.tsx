@@ -35,7 +35,7 @@ export default async function InvitePage({
                 <span className="text-foreground">{invite.roleName}</span>. Set a password to
                 finish.
               </p>
-              <AcceptForm token={token} email={invite.email} />
+              <AcceptForm token={token} email={invite.email} defaultName={invite.name ?? undefined} />
             </>
           ) : (
             <div className="text-center">

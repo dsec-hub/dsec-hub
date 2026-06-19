@@ -21,14 +21,17 @@ export function InviteForm({
 
   return (
     <div className="space-y-4">
-      <form action={formAction} className="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <div className="flex-1">
+      <form action={formAction} className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Name" hint="Optional — adds them to People right away.">
+            <TextInput name="name" placeholder="Jane Doe" autoComplete="off" />
+          </Field>
           <Field label="Email">
             <TextInput type="email" name="email" required placeholder="name@example.com" />
           </Field>
         </div>
-        <div className="sm:w-48">
-          <Field label="Role">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Role" hint="Access level in the dashboard.">
             <SelectField name="role_id" required defaultValue="">
               <option value="" disabled>
                 Choose…
@@ -40,13 +43,14 @@ export function InviteForm({
               ))}
             </SelectField>
           </Field>
-        </div>
-        <div className="sm:w-48">
           <Field label="Committee">
             <CommitteeSelect committees={committees} />
           </Field>
+          <Field label="Position" hint="Their title, e.g. Events Lead.">
+            <TextInput name="role_title" placeholder="e.g. Events Lead" autoComplete="off" />
+          </Field>
         </div>
-        <SubmitButton className="sm:mb-0.5">Send invite</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto sm:self-end">Send invite</SubmitButton>
       </form>
 
       {state && "error" in state && <FormError>{state.error}</FormError>}

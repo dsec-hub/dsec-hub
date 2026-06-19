@@ -380,10 +380,23 @@ export const appEventView = pgTable("event_view", {
 export const appInvite = pgTable("app_invite", {
 	id: serial().primaryKey().notNull(),
 	email: varchar({ length: 256 }).notNull(),
+	// Optional display name the admin set at invite time. When present a People
+	// record is created immediately (see createInvite) so the invitee shows up in
+	// /people before they accept; the accept form also prefills it.
+	name: varchar({ length: 256 }),
+	// The roster row this invite *created* when seeding /people (null when it
+	// adopted an existing member, or no name was given). Lets revoke/expiry
+	// cleanup archive the provisional person without touching real members. No FK
+	// — mirrors app_user.person_id; people may be soft-deleted out from under it.
+	personId: integer("person_id"),
 	roleId: integer("role_id").notNull(),
 	// Committee the invitee is assigned to — applied to their People record on
 	// acceptance. Optional; mirrors people.committee.
 	committee: varchar({ length: 128 }),
+	// The invitee's position / title (e.g. "Events Lead") — applied to their
+	// People record (seeded now or on acceptance). Optional; mirrors
+	// people.role_title. Distinct from role_id, which is the RBAC role.
+	roleTitle: varchar("role_title", { length: 128 }),
 	// sha-256 of the raw invite token; the raw token is only ever in the link.
 	tokenHash: varchar("token_hash", { length: 128 }).notNull(),
 	// pending | accepted | revoked
@@ -487,4 +500,74 @@ export const sponsorLeads = pgTable("sponsor_lead", {
 	index("ix_sponsor_lead_source").using("btree", table.source.asc().nullsLast().op("text_ops")),
 	index("ix_sponsor_lead_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
 	index("ix_sponsor_lead_created_at").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+]);
+
+// --- DUSA roster (read-only mirror; owned by dsec-api's weekly ingest). The
+// member portal verifies a login by matching its email against a CURRENT row
+// here. The hub reads it only to show a "matched member" hint in Member Support.
+// Declared with just the columns the hub reads. ---
+
+export const members = pgTable("members", {
+	id: serial().primaryKey().notNull(),
+	studentId: varchar("student_id", { length: 32 }).notNull(),
+	fullName: varchar("full_name", { length: 256 }),
+	email: varchar({ length: 256 }),
+	dusaMember: boolean("dusa_member").default(false).notNull(),
+	endDate: date("end_date", { mode: 'string' }),
+	isCurrent: boolean("is_current").default(true).notNull(),
+});
+
+// --- Member portal account (app-owned by dsec-app; created via that app's
+// `scripts/add-portal-account-table.ts`, NOT Alembic). One row per portal login
+// (OAuth identity + DUSA-membership lifecycle). The hub's Member Support view
+// reads these and writes `manual_override` to approve/reject access. ---
+
+export const portalAccount = pgTable("portal_account", {
+	id: serial().primaryKey().notNull(),
+	email: varchar({ length: 256 }).notNull(),
+	name: varchar({ length: 256 }),
+	avatarUrl: text("avatar_url"),
+	provider: varchar({ length: 32 }),
+	providerAccountId: varchar("provider_account_id", { length: 256 }),
+	// trial | verified | lapsed | locked | rejected (snapshot; portal recomputes live)
+	status: varchar({ length: 24 }).default('trial').notNull(),
+	trialStartedAt: timestamp("trial_started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	trialExpiresAt: timestamp("trial_expires_at", { withTimezone: true, mode: 'string' }).notNull(),
+	verifiedAt: timestamp("verified_at", { withTimezone: true, mode: 'string' }),
+	lastMatchedAt: timestamp("last_matched_at", { withTimezone: true, mode: 'string' }),
+	memberId: integer("member_id"),
+	lastCheckAt: timestamp("last_check_at", { withTimezone: true, mode: 'string' }),
+	// null | 'approved' | 'rejected' — committee decision, wins over auto-resolution.
+	manualOverride: varchar("manual_override", { length: 16 }),
+	overrideBy: varchar("override_by", { length: 256 }),
+	overrideNote: text("override_note"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("ix_portal_account_email").using("btree", table.email.asc().nullsLast()),
+	index("ix_portal_account_status").using("btree", table.status.asc().nullsLast()),
+	index("ix_portal_account_member_id").using("btree", table.memberId.asc().nullsLast()),
+]);
+
+// --- Member assistance / verification requests (app-owned by dsec-app). The
+// hub's Member Support queue lists and resolves these. ---
+
+export const assistanceRequest = pgTable("assistance_request", {
+	id: serial().primaryKey().notNull(),
+	portalAccountId: integer("portal_account_id"),
+	email: varchar({ length: 256 }).notNull(),
+	contactEmail: varchar("contact_email", { length: 256 }),
+	studentId: varchar("student_id", { length: 32 }),
+	category: varchar({ length: 32 }).default('verification').notNull(),
+	message: text().notNull(),
+	// open | resolved | dismissed
+	status: varchar({ length: 16 }).default('open').notNull(),
+	resolutionNote: text("resolution_note"),
+	resolvedBy: varchar("resolved_by", { length: 256 }),
+	resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("ix_assistance_request_status").using("btree", table.status.asc().nullsLast()),
+	index("ix_assistance_request_email").using("btree", table.email.asc().nullsLast()),
 ]);

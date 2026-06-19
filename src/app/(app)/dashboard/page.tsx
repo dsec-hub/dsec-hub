@@ -8,6 +8,7 @@ import { MODULES, canAccess, canWrite, type ModuleKey } from "@/lib/rbac";
 
 import {
   ActionItemsSection,
+  ActiveProjectsSection,
   CommitteeHealthSection,
   EventBudgetsSection,
   ExpenseBreakdownSection,
@@ -15,9 +16,12 @@ import {
   HeadlineStats,
   MembershipSection,
   MyWorkSection,
+  PartnersSection,
+  RecentDocumentsSection,
   SponsorPipelineSection,
   TasksDueSoonSection,
   UpcomingEventsSection,
+  UpcomingMeetingsSection,
 } from "./sections";
 
 // The dashboard is composed from the role's Focus config (view_config.sections):
@@ -33,17 +37,23 @@ export default async function DashboardPage() {
   const showMyWork = show("my_work");
   const showBudgets = show("event_budgets");
   const canWriteFinance = canWrite(user.modules, user.writeModules, "finance");
+  const scope = committeeScopeOf(user);
 
   // Two-column detail sections (My Work + event budgets render full-width).
+  // Order here is the dashboard's global render order; each role shows a subset.
   const gridSections = [
-    show("upcoming_events") && <UpcomingEventsSection key="ue" />,
     show("tasks_due_soon") && <TasksDueSoonSection key="td" />,
-    show("action_items") && <ActionItemsSection key="ai" scope={committeeScopeOf(user)} />,
+    show("action_items") && <ActionItemsSection key="ai" scope={scope} />,
+    show("upcoming_events") && <UpcomingEventsSection key="ue" />,
+    show("upcoming_meetings") && <UpcomingMeetingsSection key="um" scope={scope} />,
+    show("active_projects") && <ActiveProjectsSection key="ap" />,
+    show("sponsor_pipeline") && <SponsorPipelineSection key="sp" />,
+    show("partners") && <PartnersSection key="pa" />,
     show("committee_health") && <CommitteeHealthSection key="ch" />,
     show("membership") && <MembershipSection key="mb" />,
     show("finance_summary") && <FinanceSummarySection key="fs" />,
     show("expense_breakdown") && <ExpenseBreakdownSection key="ex" />,
-    show("sponsor_pipeline") && <SponsorPipelineSection key="sp" />,
+    show("recent_documents") && <RecentDocumentsSection key="rd" scope={scope} />,
   ].filter(Boolean);
 
   const empty = !showMyWork && !showBudgets && gridSections.length === 0;

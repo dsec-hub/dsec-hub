@@ -33,10 +33,12 @@ export type RoleRow = {
 export type InviteRow = {
   id: number;
   email: string;
+  name: string | null;
   status: string;
   roleId: number;
   roleName: string | null;
   committee: string | null;
+  roleTitle: string | null;
   invitedBy: string | null;
   createdAt: string;
   expiresAt: string;
@@ -138,10 +140,12 @@ export async function getInvites(): Promise<InviteRow[]> {
     .select({
       id: appInvite.id,
       email: appInvite.email,
+      name: appInvite.name,
       status: appInvite.status,
       roleId: appInvite.roleId,
       roleName: appRole.name,
       committee: appInvite.committee,
+      roleTitle: appInvite.roleTitle,
       invitedBy: appInvite.invitedBy,
       createdAt: appInvite.createdAt,
       expiresAt: appInvite.expiresAt,

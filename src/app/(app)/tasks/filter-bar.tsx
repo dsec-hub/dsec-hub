@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import { SelectField } from "@/components/form";
 import { Icons } from "@/components/icons";
@@ -56,6 +57,7 @@ export function TasksToolbar({
   onMode,
   onClear,
   options,
+  fullWrite = false,
 }: {
   config: ViewConfigTV;
   onFilter: (patch: Partial<TaskFilter>) => void;
@@ -64,10 +66,13 @@ export function TasksToolbar({
   onMode: (m: TaskViewMode) => void;
   onClear: () => void;
   options: ToolbarOptions;
+  fullWrite?: boolean;
 }) {
   const f = config.filter;
   const assigneeVal = f.assignee == null ? "" : String(f.assignee);
   const boardVal = f.boardId == null ? "" : f.boardId === "inbox" ? "inbox" : String(f.boardId);
+  // A specific board is selected (not "All boards" or the Inbox) → offer to edit it.
+  const selectedBoardId = typeof f.boardId === "number" ? f.boardId : null;
 
   // The 7 narrowing filters are collapsed by default to keep the board calm.
   // Board grouping/sort/mode + the board switcher stay visible (primary lenses).
@@ -92,15 +97,27 @@ export function TasksToolbar({
       {/* Primary controls — always visible */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Pick label="Board" value={boardVal} onChange={setBoard}>
-            <option value="">All boards</option>
-            <option value="inbox">Inbox</option>
-            {options.boards.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </Pick>
+          <div className="flex items-center gap-1.5">
+            <Pick label="Board" value={boardVal} onChange={setBoard}>
+              <option value="">All boards</option>
+              <option value="inbox">Inbox</option>
+              {options.boards.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </Pick>
+            {fullWrite && selectedBoardId != null && (
+              <Link
+                href={`/tasks/boards/${selectedBoardId}/edit`}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted transition-colors hover:bg-elevated hover:text-foreground"
+                aria-label="Edit board"
+                title="Edit board"
+              >
+                <Icons.settings className="size-4" />
+              </Link>
+            )}
+          </div>
           <Pick label="Group by" value={config.groupBy} onChange={(v) => onGroupBy(v as TaskGroupBy)}>
             {GROUP_BY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
