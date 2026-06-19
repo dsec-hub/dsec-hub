@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 
-import { Badge, PageHeader, SectionCard } from "@/components/ui";
+import { UndoButton } from "@/components/undo-button";
+import { Badge, PageHeader, SectionCard, buttonGhost } from "@/components/ui";
 import { getRoles, getUserById } from "@/lib/admin-queries";
 import { getCurrentUser } from "@/lib/dal";
+import { cn } from "@/lib/format";
 
-import { updateUser } from "../../actions";
+import { deleteUser, updateUser } from "../../actions";
 import { ResetOnboardingButton } from "../../reset-onboarding";
 import { UserForm } from "../../user-form";
 
@@ -31,15 +33,31 @@ export default async function EditUserPage({
   }));
 
   const onboarded = !!user.onboardingCompletedAt;
+  const isSelf = me?.id === userId;
 
   return (
     <>
-      <PageHeader title="Edit user" description={user.email} />
+      <PageHeader
+        title="Edit user"
+        description={user.email}
+        action={
+          isSelf ? undefined : (
+            <UndoButton
+              action={deleteUser.bind(null, userId)}
+              confirm={`Delete ${user.name ?? user.email} permanently? This removes their dashboard access and saved views.`}
+              redirectTo="/admin/users"
+              className={cn(buttonGhost, "text-danger hover:text-danger")}
+            >
+              Delete user
+            </UndoButton>
+          )
+        }
+      />
       <UserForm
         action={updateUser.bind(null, userId)}
         user={user}
         roles={roles}
-        isSelf={me?.id === userId}
+        isSelf={isSelf}
         redirectOnSuccess="/admin/users"
       />
 

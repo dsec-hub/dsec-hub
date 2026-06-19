@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/dal";
 import { canAccess, canWrite, MODULE_KEYS, type AccessLevel } from "@/lib/rbac";
 import { bool, int, str } from "@/lib/form-data";
 import { hashPassword, validatePassword } from "@/lib/password";
-import { snapshotForUpdate } from "@/lib/undo";
+import { snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 
 export type FormState = ActionResult;
@@ -122,6 +122,32 @@ export async function resetUserOnboarding(id: number): Promise<FormState> {
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${id}/edit`);
   return { ok: true, message: "Onboarding reset — they'll set up their profile again." };
+}
+
+/**
+ * Permanently delete a user account. Mirrors the lockout guards on
+ * `updateUser`: you can't delete yourself, and you can't delete the only active
+ * admin. The full row is snapshotted first so the deletion is undoable — but
+ * their saved task/event views cascade-delete and are NOT restored by the undo.
+ * Their /people roster row (linked via personId) is independent and untouched.
+ */
+export async function deleteUser(id: number): Promise<FormState> {
+  const admin = await requireAdmin();
+  if (admin.id === id) return { error: "You can't delete your own account." };
+
+  const [target] = await db.select().from(appUser).where(eq(appUser.id, id)).limit(1);
+  if (!target) return { error: "User not found." };
+
+  const role = await roleOf(target.roleId);
+  const targetIsActiveAdmin = target.isActive && !!role?.modules.includes("admin");
+  if (targetIsActiveAdmin && (await activeAdminCount()) <= 1) {
+    return { error: "This is the only active admin — assign another admin first." };
+  }
+
+  const undo = await snapshotForDelete("user", id);
+  await db.delete(appUser).where(eq(appUser.id, id));
+  revalidatePath("/admin/users");
+  return { ok: true, message: "User deleted", undo };
 }
 
 export async function setUserActive(id: number, active: boolean): Promise<void> {
