@@ -194,6 +194,21 @@ export function canWriteCommittee(
   return !!userCommittee && recordCommittee === userCommittee;
 }
 
+/** Whether a user may manage the related-task list shown on a parent entity's
+ * (event / sponsor / project) detail page — the per-row tick, the delete, and the
+ * quick-add. Granted to writers of the PARENT module (managing the entity includes
+ * managing its task list) OR writers of the Tasks module (a dedicated task editor
+ * may manage any task list, even with view-only access to the parent). Pure — used
+ * both to gate the UI and as the authoritative check in the related-task Server
+ * Actions. */
+export function canManageRelatedTasks(
+  modules: readonly string[] | null | undefined,
+  writeModules: readonly string[] | null | undefined,
+  parentKey: "events" | "sponsors" | "projects",
+): boolean {
+  return canWrite(modules, writeModules, parentKey) || canWrite(modules, writeModules, "tasks");
+}
+
 /** Whether a user may WRITE a specific task. Module writers (and admins) may
  * write any task; otherwise a user may write only the tasks ASSIGNED to them
  * (the "Member edits their own tasks" rule). Pure — used both to gate the UI

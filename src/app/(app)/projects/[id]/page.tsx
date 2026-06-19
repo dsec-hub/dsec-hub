@@ -6,6 +6,7 @@ import { PublishToggle } from "@/components/publish-toggle";
 import { RelatedTasks } from "@/components/related-tasks";
 import { Badge, Card, PageHeader, SectionCard, buttonSecondary } from "@/components/ui";
 import { requireUser } from "@/lib/dal";
+import { canAccess, canManageRelatedTasks } from "@/lib/rbac";
 import { formatDate } from "@/lib/format";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { getEventById } from "@/lib/queries";
@@ -29,6 +30,13 @@ export default async function ProjectDetailPage({
   // Access: module-holders see any project; a lead sees the project they lead
   // (read-only); anyone else is bounced. See lib/scope.ts.
   const { writable } = await requireProjectView(me, project);
+  // The Tasks card is governed by tasks-write too: a task editor with only view
+  // access to projects can manage this project's tasks. Mirror the action's
+  // requireModule("projects") gate — a scoped lead without the module can't (the
+  // mutation would bounce), so require projects VIEW alongside the write rule.
+  const canEditTasks =
+    canAccess(me.modules, "projects") &&
+    canManageRelatedTasks(me.modules, me.writeModules, "projects");
   const [people, relatedTasks, committees] = await Promise.all([
     getPersonOptions(),
     getRelatedTasks("project", pid),
@@ -110,7 +118,7 @@ export default async function ProjectDetailPage({
           kind="project"
           parentId={project.id}
           tasks={relatedTasks}
-          canWrite={writable}
+          canWrite={canEditTasks}
           committees={committees.map((c) => c.name)}
         />
       </div>

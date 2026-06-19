@@ -7,7 +7,7 @@ import { requireModule } from "@/lib/dal";
 import { formatAUD, formatDate } from "@/lib/format";
 import { sponsorStageVariant } from "@/lib/options";
 import { getPeopleOptions, getSponsorById } from "@/lib/queries";
-import { canWrite } from "@/lib/rbac";
+import { canManageRelatedTasks, canWrite } from "@/lib/rbac";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import {
   getSponsorAttachments,
@@ -26,6 +26,9 @@ export default async function SponsorDetailPage({
 }) {
   const me = await requireModule("sponsors");
   const writable = canWrite(me.modules, me.writeModules, "sponsors");
+  // A task editor with only view access to sponsors can still manage this
+  // sponsor's task list (tick/add/delete) — see canManageRelatedTasks.
+  const canEditTasks = canManageRelatedTasks(me.modules, me.writeModules, "sponsors");
   const { id } = await params;
   const sponsorId = Number(id);
   if (Number.isNaN(sponsorId)) notFound();
@@ -107,7 +110,7 @@ export default async function SponsorDetailPage({
           kind="sponsor"
           parentId={sponsorId}
           tasks={tasks}
-          canWrite={writable}
+          canWrite={canEditTasks}
           committees={committees.map((c) => c.name)}
           defaultCommittee="External Affairs"
         />

@@ -9,6 +9,7 @@
 
 import {
   canAccess,
+  canManageRelatedTasks,
   canWrite,
   isAdmin,
   isOwner,
@@ -43,6 +44,29 @@ check("canWrite: read-only denied write", canWrite(["projects"], [], "projects")
 check("canWrite: admin writes all", canWrite(["admin"], [], "projects") === true);
 check("canWrite: no read no write", canWrite(["events"], ["events"], "projects") === false);
 check("canWrite: write without read denied", canWrite([], ["projects"], "projects") === false);
+
+// --- canManageRelatedTasks: parent-write OR tasks-write gates the task card ---
+check(
+  "relatedTasks: parent writer",
+  canManageRelatedTasks(["events"], ["events"], "events") === true,
+);
+check(
+  "relatedTasks: tasks writer, parent view-only",
+  canManageRelatedTasks(["events", "tasks"], ["tasks"], "events") === true,
+);
+check(
+  "relatedTasks: parent view-only, no tasks write",
+  canManageRelatedTasks(["events", "tasks"], [], "events") === false,
+);
+check(
+  "relatedTasks: tasks view-only denied",
+  canManageRelatedTasks(["events", "tasks"], ["events"], "events") === true, // parent-write still grants
+);
+check(
+  "relatedTasks: neither write denied",
+  canManageRelatedTasks(["events", "tasks"], [], "events") === false,
+);
+check("relatedTasks: admin manages all", canManageRelatedTasks(["admin"], [], "sponsors") === true);
 
 // --- isAdmin ---
 check("isAdmin: admin", isAdmin(["admin"]) === true);

@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { taskBoards, tasks } from "@/db/workspace-schema";
 import { assertNotPreviewing, requireModule, requireWrite, type CurrentUser } from "@/lib/dal";
-import { canWrite, canWriteTask } from "@/lib/rbac";
+import { canManageRelatedTasks, canWrite, canWriteTask } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
 import { notifyTaskAssigned } from "@/lib/notifications/events";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
@@ -60,13 +60,29 @@ async function assertTaskWrite(taskId: number): Promise<CurrentUser> {
   return user;
 }
 
-// Parent entity → the dashboard module that governs it. Quick-adding a task from
-// an entity's detail page requires write to that module (you manage the entity).
+// Parent entity → the dashboard module that governs it.
 const PARENT_MODULE: Record<TaskParentKind, "sponsors" | "events" | "projects"> = {
   sponsor: "sponsors",
   event: "events",
   project: "projects",
 };
+
+/**
+ * Authorise a related-task mutation (quick-add / tick / delete) on a parent
+ * entity's detail page. The user must be able to VIEW the parent (they're on its
+ * page) and may manage its task list if they can write the PARENT module OR the
+ * Tasks module — so a dedicated task editor with only view access to the parent
+ * can still tick/add/delete its tasks. Mirrors requireWrite's preview guard.
+ * The authoritative backstop behind the UI gate (canManageRelatedTasks).
+ */
+async function requireRelatedTaskWrite(kind: TaskParentKind): Promise<CurrentUser> {
+  const user = await requireModule(PARENT_MODULE[kind]);
+  if (!canManageRelatedTasks(user.modules, user.writeModules, PARENT_MODULE[kind])) {
+    redirect("/dashboard");
+  }
+  assertNotPreviewing(user);
+  return user;
+}
 
 /**
  * Quick-add a task linked to a parent entity (sponsor/event/project) from that
@@ -78,7 +94,7 @@ export async function quickAddRelatedTask(
   parentId: number,
   fd: FormData,
 ): Promise<void> {
-  const user = await requireWrite(PARENT_MODULE[kind]);
+  const user = await requireRelatedTaskWrite(kind);
   const title = str(fd, "title");
   if (!title) return;
   const values: typeof tasks.$inferInsert = { title, status: "To Do" };
@@ -97,9 +113,9 @@ export async function quickAddRelatedTask(
 
 /**
  * Tick / untick a task from its parent entity's detail page (event/project/
- * sponsor). Authorised by the PARENT module's write — mirrors
+ * sponsor). Authorised by `requireRelatedTaskWrite` — mirrors
  * `quickAddRelatedTask`, since managing a parent's task list is part of managing
- * the parent (and lets the affordance, which is gated on parent-write, never
+ * the parent (and lets the affordance, which is gated identically, never
  * bounce). Sets the same status + completedAt as the board's "Done" move.
  * Returns void: the card is toggled optimistically and a tick is self-reversible
  * (just untick it), so there's no undo toast.
@@ -110,7 +126,7 @@ export async function setRelatedTaskDone(
   taskId: number,
   done: boolean,
 ): Promise<void> {
-  const user = await requireWrite(PARENT_MODULE[kind]);
+  const user = await requireRelatedTaskWrite(kind);
   const now = new Date().toISOString();
   await db
     .update(tasks)
@@ -123,17 +139,17 @@ export async function setRelatedTaskDone(
 
 /**
  * Hard-delete a task from its parent entity's detail page, returning an undo
- * token so the Sonner toast can restore it. Authorised by the PARENT module's
- * write (mirrors `quickAddRelatedTask`): the people who can add a task to an
- * event/project/sponsor can remove it. The card is dropped optimistically in the
- * UI while this runs in the background.
+ * token so the Sonner toast can restore it. Authorised by
+ * `requireRelatedTaskWrite` (mirrors `quickAddRelatedTask`): anyone who can add a
+ * task to an event/project/sponsor can remove it. The card is dropped
+ * optimistically in the UI while this runs in the background.
  */
 export async function deleteRelatedTask(
   kind: TaskParentKind,
   parentId: number,
   taskId: number,
 ): Promise<FormState> {
-  const user = await requireWrite(PARENT_MODULE[kind]);
+  const user = await requireRelatedTaskWrite(kind);
   const undo = await snapshotForDelete("task", taskId);
   await db.delete(tasks).where(eq(tasks.id, taskId));
   await logMutation(user, "delete", "task", taskId);

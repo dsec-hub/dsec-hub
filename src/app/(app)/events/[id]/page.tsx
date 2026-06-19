@@ -12,7 +12,7 @@ import { requireModule } from "@/lib/dal";
 import { formatAUD, formatDate, formatTime, initials, todayISO } from "@/lib/format";
 import { dusaVariant, eventStatusVariant } from "@/lib/options";
 import { getEventById, getPeopleOptions } from "@/lib/queries";
-import { canWrite } from "@/lib/rbac";
+import { canManageRelatedTasks, canWrite } from "@/lib/rbac";
 import { fetchReviewSummary } from "@/lib/reviews";
 import {
   getEventConnections,
@@ -32,6 +32,9 @@ export default async function EventDetailPage({
 }) {
   const me = await requireModule("events");
   const writable = canWrite(me.modules, me.writeModules, "events");
+  // The Tasks card is governed by tasks-write too: a task editor with only
+  // view access to events can still tick/add/delete an event's tasks.
+  const canEditTasks = canManageRelatedTasks(me.modules, me.writeModules, "events");
   const { id } = await params;
   const eventId = Number(id);
   if (Number.isNaN(eventId)) notFound();
@@ -304,7 +307,7 @@ export default async function EventDetailPage({
           kind="event"
           parentId={eventId}
           tasks={relatedTasks}
-          canWrite={writable}
+          canWrite={canEditTasks}
           committees={committees.map((c) => c.name)}
           defaultCommittee={event.committee}
         />
