@@ -17,6 +17,7 @@ export default async function SettingsLayout({
   const items = [
     { href: "/settings/profile", label: "Profile" },
     { href: "/settings/appearance", label: "Appearance" },
+    { href: "/settings/notifications", label: "Notifications" },
     { href: "/settings/password", label: "Password" },
     // Only surface API & MCP for roles that can actually mint a token.
     ...(allowedScopesFor(user).length > 0

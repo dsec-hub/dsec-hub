@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -9,6 +10,7 @@ import { taskBoards, tasks } from "@/db/workspace-schema";
 import { assertNotPreviewing, requireModule, requireWrite, type CurrentUser } from "@/lib/dal";
 import { canWrite, canWriteTask } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
+import { notifyTaskAssigned } from "@/lib/notifications/events";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 import { logMutation } from "@/lib/usage";
@@ -16,6 +18,27 @@ import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
 import type { TaskParentKind } from "@/lib/workspace-queries";
 
 export type FormState = ActionResult;
+
+/**
+ * Fire an "assigned to you" notification out-of-band. Wrapped in `after()` so it
+ * runs once the response is sent and a slow/failed channel never blocks or
+ * breaks the task mutation. `notifyTaskAssigned` itself skips self-assignment
+ * and assignees with no login. No-op when there's no assignee/task id.
+ */
+function notifyAssignmentAfter(
+  taskId: number | undefined,
+  assigneePersonId: number | null | undefined,
+  actorUserId: number,
+): void {
+  if (!taskId || !assigneePersonId) return;
+  after(async () => {
+    try {
+      await notifyTaskAssigned({ taskId, assigneePersonId, actorUserId });
+    } catch (err) {
+      console.warn("[notify] assignment notification failed:", err);
+    }
+  });
+}
 
 /**
  * Authorise a mutation on ONE existing task. Module writers (and admins) may
@@ -150,6 +173,7 @@ export async function createTask(_prev: FormState, fd: FormData): Promise<FormSt
   if (!fullWrite) values.assigneeId = user.personId; // force self-assignment
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
+  notifyAssignmentAfter(row?.id, values.assigneeId, user.id);
   revalidateTasks();
   return { ok: true, message: "Task created", undo: createToken("task", row?.id) };
 }
@@ -165,12 +189,21 @@ export async function updateTask(
   if (!values.title) return { error: "Title is required." };
   // A member editing their own task can't reassign it away from themselves.
   if (!fullWrite) values.assigneeId = user.personId;
+  // Capture the prior assignee so we notify only on a real reassignment.
+  const [priorTask] = await db
+    .select({ assigneeId: tasks.assigneeId })
+    .from(tasks)
+    .where(eq(tasks.id, id))
+    .limit(1);
   const undo = await snapshotForUpdate("task", id);
   await db
     .update(tasks)
     .set({ ...values, updatedAt: new Date().toISOString() })
     .where(eq(tasks.id, id));
   await logMutation(user, "update", "task", id);
+  if (values.assigneeId && values.assigneeId !== priorTask?.assigneeId) {
+    notifyAssignmentAfter(id, values.assigneeId, user.id);
+  }
   revalidateTasks();
   return { ok: true, message: "Task updated", undo };
 }
@@ -212,6 +245,7 @@ export async function createSubtask(parentId: number, fd: FormData): Promise<voi
   if (!fullWrite) values.assigneeId = user.personId;
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
+  notifyAssignmentAfter(row?.id, values.assigneeId, user.id);
   revalidatePath(`/tasks/${parentId}/edit`);
   revalidateTasks();
 }
@@ -260,6 +294,7 @@ export async function quickAddTask(
   if (!fullWrite) values.assigneeId = user.personId; // members add self-assigned
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
+  notifyAssignmentAfter(row?.id, values.assigneeId, user.id);
   revalidateTasks();
 }
 
@@ -386,6 +421,17 @@ export async function reassignTask(taskId: number, dim: string, value: string): 
   const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
   const now = new Date().toISOString();
   const set: Partial<typeof tasks.$inferInsert> = { updatedAt: now };
+  // Capture the prior assignee before the write so we can notify only on a real
+  // change (drag-and-drop onto an assignee lane).
+  let priorAssignee: number | null = null;
+  if (dim === "assignee") {
+    const [p] = await db
+      .select({ assigneeId: tasks.assigneeId })
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1);
+    priorAssignee = p?.assigneeId ?? null;
+  }
   switch (dim) {
     case "status":
       set.status = value;
@@ -411,6 +457,9 @@ export async function reassignTask(taskId: number, dim: string, value: string): 
   }
   await db.update(tasks).set(set).where(eq(tasks.id, taskId));
   await logMutation(user, "update", "task", taskId);
+  if (dim === "assignee" && set.assigneeId && set.assigneeId !== priorAssignee) {
+    notifyAssignmentAfter(taskId, set.assigneeId, user.id);
+  }
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }

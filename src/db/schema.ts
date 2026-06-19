@@ -571,3 +571,65 @@ export const assistanceRequest = pgTable("assistance_request", {
 	index("ix_assistance_request_status").using("btree", table.status.asc().nullsLast()),
 	index("ix_assistance_request_email").using("btree", table.email.asc().nullsLast()),
 ]);
+
+// --- Per-user notification preferences (app-owned by dsec-hub; created via
+// `scripts/add-notification-tables.ts`, NOT by Alembic). One row per login user.
+// A missing row means "all defaults" (see DEFAULT_PREFS in lib/notifications) —
+// the row is created lazily on first save. Drives the on-assign + due-soon
+// notifications across Email / Discord / Telegram. ---
+
+export const notificationPref = pgTable("notification_pref", {
+	id: serial().primaryKey().notNull(),
+	userId: integer("user_id").notNull(),
+	// Channels — each has an enable flag plus the connection detail it needs.
+	emailEnabled: boolean("email_enabled").default(true).notNull(),
+	// Null ⇒ deliver to the account email (app_user.email).
+	emailAddress: varchar("email_address", { length: 256 }),
+	discordEnabled: boolean("discord_enabled").default(false).notNull(),
+	discordWebhookUrl: text("discord_webhook_url"),
+	telegramEnabled: boolean("telegram_enabled").default(false).notNull(),
+	telegramChatId: varchar("telegram_chat_id", { length: 32 }),
+	// Short-lived code embedded in the t.me deep link; the webhook matches it to
+	// claim the chat, then clears it.
+	telegramLinkCode: varchar("telegram_link_code", { length: 32 }),
+	telegramLinkedAt: timestamp("telegram_linked_at", { withTimezone: true, mode: 'string' }),
+	// Categories the user can mute independently.
+	notifyOnAssign: boolean("notify_on_assign").default(true).notNull(),
+	notifyDueDigest: boolean("notify_due_digest").default(true).notNull(),
+	notifyDueReminder: boolean("notify_due_reminder").default(true).notNull(),
+	// Tuning: digest horizon (tasks due within N days) + reminder lead time.
+	dueSoonDays: integer("due_soon_days").default(3).notNull(),
+	reminderLeadDays: integer("reminder_lead_days").default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("ix_notification_pref_user_id").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [appUser.id],
+			name: "notification_pref_user_id_fkey"
+		}).onDelete("cascade"),
+]);
+
+// --- Notification audit + dedupe guard (app-owned; created via
+// `scripts/add-notification-tables.ts`). Every send attempt writes one row; the
+// UNIQUE `dedupe_key` lets the daily cron re-run idempotently (a digest/reminder
+// already sent for a (user, task, due-date, channel) is skipped). ---
+
+export const notificationLog = pgTable("notification_log", {
+	id: serial().primaryKey().notNull(),
+	userId: integer("user_id").notNull(),
+	// email | discord | telegram
+	channel: varchar({ length: 16 }).notNull(),
+	// task_assigned | due_digest | due_reminder
+	kind: varchar({ length: 32 }).notNull(),
+	taskId: integer("task_id"),
+	dedupeKey: varchar("dedupe_key", { length: 256 }).notNull(),
+	// sent | failed | skipped
+	status: varchar({ length: 16 }).notNull(),
+	detail: varchar({ length: 512 }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("ix_notification_log_dedupe_key").using("btree", table.dedupeKey.asc().nullsLast().op("text_ops")),
+	index("ix_notification_log_user_id").using("btree", table.userId.asc().nullsLast().op("int4_ops")),
+]);
