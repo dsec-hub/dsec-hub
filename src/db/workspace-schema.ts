@@ -213,6 +213,8 @@ export const meetings = pgTable("meeting", {
   // Only that committee + "all"-scope roles (exec/secretary/admin) see it.
   committee: varchar({ length: 128 }),
   meetingDate: date("meeting_date"),
+  // Optional local start time, "HH:MM" 24h (dsec-api migration d3b7f1a9c5e2).
+  meetingTime: varchar("meeting_time", { length: 8 }),
   location: varchar({ length: 256 }),
   // Either a linked person ({ personId, name }) or a free-text guest ({ name }).
   // Legacy rows may hold plain strings, so reads must normalise (see attendeeName).

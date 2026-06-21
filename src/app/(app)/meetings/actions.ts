@@ -51,6 +51,7 @@ function parseMeeting(fd: FormData) {
     type: str(fd, "type"),
     committee: str(fd, "committee"),
     meetingDate: str(fd, "meeting_date"),
+    meetingTime: str(fd, "meeting_time"),
     location: str(fd, "location"),
     status: str(fd, "status"),
     attendees: parseAttendees(fd),

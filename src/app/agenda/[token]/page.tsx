@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import { attendeeName } from "@/lib/workspace-options";
 import {
   getMeetingByAgendaToken,
@@ -48,9 +48,11 @@ export default async function PublicAgendaPage({
     items.map((i) => i.owner_person_id ?? 0).filter(Boolean),
   );
 
-  const meta = [formatDate(meeting.meetingDate), meeting.location]
-    .filter(Boolean)
-    .join(" · ");
+  const when = meeting.meetingDate
+    ? formatDate(meeting.meetingDate) +
+      (meeting.meetingTime ? ` at ${formatTime(meeting.meetingTime)}` : "")
+    : null;
+  const meta = [when, meeting.location].filter(Boolean).join(" · ");
 
   return (
     <main className="min-h-screen bg-background text-foreground">

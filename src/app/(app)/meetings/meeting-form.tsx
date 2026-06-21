@@ -5,6 +5,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { Field, FormError, SelectField, TextArea, TextInput } from "@/components/form";
 import { DateField } from "@/components/date-field";
+import { TimeField } from "@/components/time-field";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, buttonGhost, buttonSecondary } from "@/components/ui";
 import { MEETING_STATUSES, MEETING_TYPES } from "@/lib/workspace-options";
@@ -45,6 +46,8 @@ export function MeetingForm({
   const [state, formAction] = useActionState(action, undefined);
   useActionToast(state);
   const m = meeting;
+  // TimeField is controlled; it writes "HH:MM" to a hidden `meeting_time` input.
+  const [time, setTime] = useState(m?.meetingTime ?? "");
 
   useEffect(() => {
     if (state?.ok) onSuccess?.();
@@ -87,6 +90,9 @@ export function MeetingForm({
           )}
           <Field label="Date">
             <DateField name="meeting_date" defaultValue={m?.meetingDate ?? ""} />
+          </Field>
+          <Field label="Start time" hint="Optional — when the meeting begins.">
+            <TimeField name="meeting_time" value={time} onChange={setTime} />
           </Field>
           <Field label="Location">
             <TextInput name="location" defaultValue={m?.location ?? ""} />

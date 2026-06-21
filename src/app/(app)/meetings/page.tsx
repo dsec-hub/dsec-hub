@@ -5,7 +5,7 @@ import { requireModule } from "@/lib/dal";
 import { committeeScopeOf } from "@/lib/scope";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { agendaStatusMeta } from "@/lib/agenda";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import type { BadgeVariant } from "@/lib/options";
 import { canWrite } from "@/lib/rbac";
 import { getEventOptions, getMeetings, getPersonOptions } from "@/lib/workspace-queries";
@@ -85,7 +85,8 @@ export default async function MeetingsPage() {
                         </Badge>
                       )}
                       <span>
-                        {m.type ?? "—"} · {formatDate(m.meetingDate)} · {m.location ?? "—"}
+                        {m.type ?? "—"} · {formatDate(m.meetingDate)}
+                        {m.meetingTime ? ` at ${formatTime(m.meetingTime)}` : ""} · {m.location ?? "—"}
                       </span>
                     </div>
                   </div>

@@ -7,7 +7,7 @@ import { Badge, PageHeader, SectionCard, buttonSecondary } from "@/components/ui
 import { MeetingActionItems } from "./action-items";
 import { requireModule } from "@/lib/dal";
 import { committeeScopeOf } from "@/lib/scope";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import { canWrite } from "@/lib/rbac";
 import {
   agendaStatusMeta,
@@ -34,12 +34,16 @@ export default async function MeetingDetailPage({
   const agenda = sortedAgenda(meeting.agendaItems);
   const agendaTotal = totalAgendaMinutes(meeting.agendaItems);
   const agendaMeta = agendaStatusMeta(meeting.agendaStatus);
+  const when = meeting.meetingDate
+    ? formatDate(meeting.meetingDate) +
+      (meeting.meetingTime ? ` at ${formatTime(meeting.meetingTime)}` : "")
+    : null;
 
   return (
     <>
       <PageHeader
         title={meeting.title}
-        description={[meeting.type, formatDate(meeting.meetingDate), meeting.location].filter(Boolean).join(" · ")}
+        description={[meeting.type, when, meeting.location].filter(Boolean).join(" · ")}
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "Meetings", href: "/meetings" },
