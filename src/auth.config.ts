@@ -22,6 +22,10 @@ export const authConfig = {
         return isLoggedIn ? Response.redirect(new URL("/", nextUrl)) : true;
       }
       if (path.startsWith("/invite")) return true;
+      // Public, read-only meeting-agenda share links (/agenda/<token>). The token
+      // itself is the credential; the page only ever resolves shared/locked
+      // agendas (a draft / wrong token / archived meeting reads as not-found).
+      if (path.startsWith("/agenda")) return true;
 
       if (!isLoggedIn) return false; // everything else requires a session
 

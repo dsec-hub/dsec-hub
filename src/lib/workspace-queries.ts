@@ -1013,6 +1013,44 @@ export async function getMeetingById(id: number, scope: CommitteeScope) {
   const [row] = await db.select().from(meetings).where(and(...conds)).limit(1);
   return row ?? null; // out-of-scope meetings read as not-found
 }
+
+/**
+ * Look up a meeting by its PUBLIC agenda share token — used by the no-auth
+ * /agenda/[token] view. Only resolves once the agenda is `shared` or `locked`
+ * (a draft, a wrong token, or an archived meeting all read as not-found), so a
+ * draft agenda is never reachable from the public link.
+ */
+export async function getMeetingByAgendaToken(token: string) {
+  if (!token) return null;
+  const [row] = await db
+    .select()
+    .from(meetings)
+    .where(
+      and(
+        eq(meetings.agendaShareToken, token),
+        inArray(meetings.agendaStatus, ["shared", "locked"]),
+        eq(meetings.archived, false),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Resolve {id, name} for a set of person ids, for PUBLIC display on the agenda
+ * share page. EXCLUDES admin-only people so a sensitive internal contact can
+ * never leak through a shared link — an admin-only owner simply renders with no
+ * name. Archived people are still resolved: a former member who owned an item
+ * isn't sensitive (names are public on the team page), and hiding the name would
+ * just confuse invitees. Returns a Map for lookup. */
+export async function getPeopleNamesByIds(ids: number[]): Promise<Map<number, string>> {
+  const unique = [...new Set(ids.filter((n) => Number.isFinite(n) && n > 0))];
+  if (!unique.length) return new Map();
+  const rows = await db
+    .select({ id: people.id, name: people.name })
+    .from(people)
+    .where(and(inArray(people.id, unique), eq(people.adminOnly, false)));
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
 export async function getDocumentById(id: number, scope: CommitteeScope) {
   const conds = [eq(documents.id, id)];
   const cc = committeeCond(documents.committee, scope);

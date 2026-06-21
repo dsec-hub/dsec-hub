@@ -19,6 +19,22 @@ const ts = (name: string) =>
 /** A meeting attendee: a linked person (with id) or a free-text guest. */
 export type Attendee = { personId?: number | null; name: string };
 
+/**
+ * One pre-meeting agenda item, as stored in the `meeting.agenda_items` JSONB.
+ * Keys are snake_case because dsec-api (Pydantic / the REST + MCP path) reads and
+ * writes the SAME column — both sides must agree on the on-disk shape.
+ */
+export type AgendaItem = {
+  id: string;
+  order: number;
+  title: string;
+  owner_person_id?: number | null;
+  duration_minutes?: number | null;
+  notes?: string | null; // markdown
+  related_task_id?: number | null;
+  related_event_id?: number | null;
+};
+
 // --- domain tables (re-declared with the columns dsec-api added) ----------
 
 export const people = pgTable("people", {
@@ -208,6 +224,14 @@ export const meetings = pgTable("meeting", {
   status: varchar({ length: 32 }),
   relatedEventId: integer("related_event_id"),
   createdBy: varchar("created_by", { length: 256 }),
+  // Pre-meeting agenda (dsec-api migration c1a4e7b9f2d6). Distinct from the
+  // post-meeting transcript/notes/action-items above: built before the meeting
+  // and shared read-only with invitees at /agenda/<agendaShareToken>.
+  agendaItems: json("agenda_items").$type<AgendaItem[]>(),
+  // draft (private) -> shared (public link live) -> locked (frozen at start).
+  agendaStatus: varchar("agenda_status", { length: 16 }).default("draft").notNull(),
+  agendaSharedAt: ts("agenda_shared_at"),
+  agendaShareToken: varchar("agenda_share_token", { length: 64 }),
   createdAt: ts("created_at").defaultNow().notNull(),
   updatedAt: ts("updated_at").defaultNow().notNull(),
   archived: boolean().default(false).notNull(),
