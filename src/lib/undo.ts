@@ -7,6 +7,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { appRole, appSetting, appUser, committee, events, finance, people, sponsors } from "@/db/schema";
 import {
+  documents,
   eventConnections,
   eventPartners,
   eventSpeakers,
@@ -45,6 +46,7 @@ export const REGISTRY: Record<UndoKey, Reg> = {
   project: { table: projects, module: "projects", label: "Project", paths: ["/projects", "/dashboard", "/"] },
   task: { table: tasks, module: "tasks", label: "Task", paths: ["/tasks", "/dashboard", "/"] },
   board: { table: taskBoards, module: "tasks", label: "Board", paths: ["/tasks", "/dashboard", "/"] },
+  document: { table: documents, module: "documents", label: "Document", paths: ["/docs", "/dashboard", "/"] },
   user: { table: appUser, module: "admin", label: "User", paths: ["/admin/users"] },
   role: { table: appRole, module: "admin", label: "Role", paths: ["/admin/roles", "/admin/users"] },
   committee: {

@@ -13,10 +13,12 @@ import { formatAUD, formatDate, formatTime, initials, todayISO } from "@/lib/for
 import { dusaVariant, eventStatusVariant } from "@/lib/options";
 import { getEventById, getPeopleOptions } from "@/lib/queries";
 import { getEventOwners } from "@/lib/owners";
-import { canManageRelatedTasks, canWrite } from "@/lib/rbac";
+import { canAccess, canManageRelatedTasks, canWrite } from "@/lib/rbac";
 import { fetchReviewSummary } from "@/lib/reviews";
+import { committeeScopeOf } from "@/lib/scope";
 import {
   getEventConnections,
+  getEventDocuments,
   getEventPartners,
   getEventSpeakers,
   getMedia,
@@ -25,6 +27,7 @@ import {
 
 import { setEventPublished } from "../actions";
 import { ReviewPanel } from "../review-panel";
+import { EventDocuments } from "./event-documents";
 
 export default async function EventDetailPage({
   params,
@@ -36,22 +39,37 @@ export default async function EventDetailPage({
   // The Tasks card is governed by tasks-write too: a task editor with only
   // view access to events can still tick/add/delete an event's tasks.
   const canEditTasks = canManageRelatedTasks(me.modules, me.writeModules, "events");
+  // Docs are their own committee-scoped module: show the section to anyone who
+  // can read Docs; allow add/edit/remove to Docs writers (admins included).
+  const canAccessDocs = canAccess(me.modules, "documents");
+  const canManageDocs = canWrite(me.modules, me.writeModules, "documents");
   const { id } = await params;
   const eventId = Number(id);
   if (Number.isNaN(eventId)) notFound();
 
-  const [event, people, committees, media, relatedTasks, speakers, partners, connections, coLeads] =
-    await Promise.all([
-      getEventById(eventId),
-      getPeopleOptions(),
-      getCommitteeOptions(),
-      getMedia("event", eventId),
-      getRelatedTasks("event", eventId),
-      getEventSpeakers(eventId).catch(() => []),
-      getEventPartners(eventId).catch(() => []),
-      getEventConnections(eventId).catch(() => []),
-      getEventOwners(eventId).catch(() => []),
-    ]);
+  const [
+    event,
+    people,
+    committees,
+    media,
+    relatedTasks,
+    speakers,
+    partners,
+    connections,
+    coLeads,
+    eventDocuments,
+  ] = await Promise.all([
+    getEventById(eventId),
+    getPeopleOptions(),
+    getCommitteeOptions(),
+    getMedia("event", eventId),
+    getRelatedTasks("event", eventId),
+    getEventSpeakers(eventId).catch(() => []),
+    getEventPartners(eventId).catch(() => []),
+    getEventConnections(eventId).catch(() => []),
+    getEventOwners(eventId).catch(() => []),
+    canAccessDocs ? getEventDocuments(eventId, committeeScopeOf(me)) : Promise.resolve([]),
+  ]);
   if (!event) notFound();
 
   const reviewSummary = event.reviewFormId ? await fetchReviewSummary(eventId) : null;
@@ -319,6 +337,17 @@ export default async function EventDetailPage({
           defaultCommittee={event.committee}
         />
       </div>
+
+      {canAccessDocs && (
+        <div className="mb-6">
+          <EventDocuments
+            eventId={eventId}
+            documents={eventDocuments}
+            tasks={relatedTasks.map((t) => ({ id: t.id, title: t.title }))}
+            canWrite={canManageDocs}
+          />
+        </div>
+      )}
 
       {media.length > 0 && (
         <div className="mb-6">

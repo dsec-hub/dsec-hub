@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 
-import { Field, FormError, SelectField, TextArea, TextInput } from "@/components/form";
-import { Markdown } from "@/components/markdown";
-import { Segmented } from "@/components/segmented";
+import { Field, FormError, SelectField, TextInput } from "@/components/form";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonSecondary } from "@/components/ui";
-import { cn } from "@/lib/format";
 import { useActionToast } from "@/lib/use-action-toast";
 import { DOC_STATUSES, DOC_TYPES } from "@/lib/workspace-options";
 import type { Option } from "@/lib/workspace-queries";
@@ -50,9 +48,6 @@ export function DocumentForm({
 }) {
   const [state, formAction] = useActionState(action, undefined);
   useActionToast(state);
-  const [content, setContent] = useState(document?.content ?? "");
-  // On mobile the editor and preview can't sit side by side, so a toggle picks one.
-  const [mobileView, setMobileView] = useState<"write" | "preview">("write");
   const d = document;
 
   useEffect(() => {
@@ -173,42 +168,17 @@ export function DocumentForm({
             <label htmlFor="doc-content" className="text-sm text-muted">
               Content
             </label>
-            {/* Side by side on desktop; a toggle swaps panes on narrow screens. */}
-            <Segmented
-              className="lg:hidden"
-              options={[
-                { value: "write", label: "Write" },
-                { value: "preview", label: "Preview" },
-              ]}
-              value={mobileView}
-              onChange={setMobileView}
-            />
-            <span className="hidden text-xs text-muted/70 lg:block">
-              Markdown — headings, code blocks, tables, lists, quotes
+            <span className="hidden text-xs text-muted/70 sm:block">
+              Formats as you type — # heading, - list, **bold**, `code`
             </span>
           </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className={cn(mobileView === "write" ? "block" : "hidden", "lg:block")}>
-              <TextArea
-                id="doc-content"
-                name="content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write in Markdown…"
-                className="h-[60vh] min-h-80 resize-none font-mono text-[0.8rem] leading-relaxed"
-              />
-            </div>
-            <div className={cn(mobileView === "preview" ? "block" : "hidden", "lg:block")}>
-              <div className="h-[60vh] min-h-80 overflow-y-auto rounded-md border border-border bg-surface px-4 py-3">
-                {content.trim() ? (
-                  <Markdown content={content} />
-                ) : (
-                  <p className="text-sm text-muted/70">Nothing to preview yet.</p>
-                )}
-              </div>
-            </div>
-          </div>
+          <MarkdownEditor
+            id="doc-content"
+            name="content"
+            defaultValue={d?.content ?? ""}
+            placeholder="Write… it formats as you type"
+            canWrite={canWrite}
+          />
         </div>
       </fieldset>
 

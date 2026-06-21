@@ -831,6 +831,35 @@ export async function getTaskDocuments(taskId: number, scope: CommitteeScope) {
     .orderBy(desc(documents.updatedAt));
 }
 
+/** Documents attached to an event (document.related_event_id), committee-scoped
+ * exactly like the Docs list — a viewer never sees out-of-scope docs here. Each
+ * row carries the linked task's title (when attached to one) so the event page
+ * can show "↳ task", plus `content` so the inline editor can prefill without a
+ * second round-trip (a per-event doc set is small). Surfaced as a managed
+ * "Documents" section on the event detail page. */
+export type EventDocumentRow = Awaited<ReturnType<typeof getEventDocuments>>[number];
+
+export async function getEventDocuments(eventId: number, scope: CommitteeScope) {
+  const conds = [eq(documents.relatedEventId, eventId), eq(documents.archived, false)];
+  const cc = committeeCond(documents.committee, scope);
+  if (cc) conds.push(cc);
+  return db
+    .select({
+      id: documents.id,
+      title: documents.title,
+      type: documents.type,
+      status: documents.status,
+      content: documents.content,
+      updatedAt: documents.updatedAt,
+      relatedTaskId: documents.relatedTaskId,
+      relatedTaskTitle: tasks.title,
+    })
+    .from(documents)
+    .leftJoin(tasks, eq(documents.relatedTaskId, tasks.id))
+    .where(and(...conds))
+    .orderBy(desc(documents.updatedAt));
+}
+
 // ===========================================================================
 // Sponsors (pipeline)
 // ===========================================================================

@@ -22,6 +22,7 @@ export type UndoKey =
   | "project"
   | "task"
   | "board"
+  | "document"
   | "user"
   | "role"
   | "committee";
