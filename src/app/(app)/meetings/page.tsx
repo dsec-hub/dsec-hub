@@ -4,6 +4,7 @@ import { Badge, EmptyState, PageHeader, SectionCard, buttonGhost } from "@/compo
 import { requireModule } from "@/lib/dal";
 import { committeeScopeOf } from "@/lib/scope";
 import { getCommitteeOptions } from "@/lib/committee-queries";
+import { agendaStatusMeta } from "@/lib/agenda";
 import { formatDate } from "@/lib/format";
 import type { BadgeVariant } from "@/lib/options";
 import { canWrite } from "@/lib/rbac";
@@ -78,6 +79,11 @@ export default async function MeetingsPage() {
                       <Badge variant={m.committee ? "accent" : "neutral"}>
                         {m.committee ?? "Club-wide"}
                       </Badge>
+                      {m.agendaItems && m.agendaItems.length > 0 && (
+                        <Badge variant={agendaStatusMeta(m.agendaStatus).variant}>
+                          Agenda · {m.agendaItems.length}
+                        </Badge>
+                      )}
                       <span>
                         {m.type ?? "—"} · {formatDate(m.meetingDate)} · {m.location ?? "—"}
                       </span>
@@ -85,6 +91,9 @@ export default async function MeetingsPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <Badge variant={meetingStatusVariant(m.status)}>{m.status ?? "—"}</Badge>
+                    <Link href={`/meetings/${m.id}/agenda`} className={buttonGhost}>
+                      {m.agendaItems && m.agendaItems.length > 0 ? "Agenda" : "+ Agenda"}
+                    </Link>
                     <Link href={`/meetings/${m.id}/edit`} className={buttonGhost}>
                       Edit
                     </Link>
