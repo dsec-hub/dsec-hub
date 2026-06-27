@@ -108,6 +108,30 @@ export function leadStatusVariant(status: string | null | undefined): BadgeVaria
   }
 }
 
+// Partner relationship pipeline (lightweight — not the full sponsor CRM).
+// A sourced club starts as a "lead"; existing collaborators are "active".
+export const PARTNER_STATUSES = ["lead", "contacted", "active", "inactive"] as const;
+
+export const PARTNER_STATUS_LABELS: Record<string, string> = {
+  lead: "Lead",
+  contacted: "Contacted",
+  active: "Active",
+  inactive: "Inactive",
+};
+
+export function partnerStatusVariant(status: string | null | undefined): BadgeVariant {
+  switch (status) {
+    case "active":
+      return "success";
+    case "contacted":
+      return "accent";
+    case "inactive":
+      return "neutral";
+    default:
+      return "warning"; // lead
+  }
+}
+
 export const FINANCE_TYPES = [
   "Grant",
   "Sponsorship Income",

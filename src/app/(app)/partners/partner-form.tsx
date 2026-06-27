@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 
-import { CheckboxField, Field, FormError, TextArea, TextInput } from "@/components/form";
+import { CheckboxField, Field, FormError, SelectField, TextArea, TextInput } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
 import { buttonSecondary } from "@/components/ui";
+import { PARTNER_STATUSES, PARTNER_STATUS_LABELS } from "@/lib/options";
 import { useUndoToast } from "@/lib/use-undo-toast";
 import type { PartnerRow } from "@/lib/workspace-queries";
 
@@ -50,8 +51,35 @@ export function PartnerForm({
           <Field label="Name" hint="Club / society / organisation name.">
             <TextInput name="name" required defaultValue={p?.name ?? ""} />
           </Field>
+          <Field label="Status" hint="Where this club sits in our outreach.">
+            <SelectField name="status" defaultValue={p?.status ?? "lead"}>
+              {PARTNER_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {PARTNER_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Email" hint="Primary contact / committee email.">
+            <TextInput name="email" type="email" placeholder="club@example.com" defaultValue={p?.email ?? ""} />
+          </Field>
           <Field label="Website">
             <TextInput name="website" type="url" placeholder="https://…" defaultValue={p?.website ?? ""} />
+          </Field>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field label="Instagram">
+            <TextInput name="instagram" placeholder="@handle or URL" defaultValue={p?.instagram ?? ""} />
+          </Field>
+          <Field label="LinkedIn">
+            <TextInput name="linkedin" type="url" placeholder="https://linkedin.com/…" defaultValue={p?.linkedin ?? ""} />
+          </Field>
+          <Field label="Facebook">
+            <TextInput name="facebook" type="url" placeholder="https://facebook.com/…" defaultValue={p?.facebook ?? ""} />
           </Field>
         </div>
 

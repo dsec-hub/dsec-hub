@@ -327,7 +327,17 @@ export const partners = pgTable("partner", {
   id: serial().primaryKey(),
   name: varchar({ length: 256 }).notNull(),
   website: varchar({ length: 256 }),
+  // Contact + socials, used to track a club before/while we collaborate.
+  email: varchar({ length: 256 }),
+  instagram: varchar({ length: 256 }),
+  linkedin: varchar({ length: 256 }),
+  facebook: varchar({ length: 256 }),
   notes: text(),
+  // Lightweight relationship pipeline (NOT the full sponsor CRM): a sourced
+  // club starts as "lead" and progresses lead -> contacted -> active ->
+  // inactive. New rows default to "lead"; pre-existing partners were backfilled
+  // to "active" by migration e3a7c5f1b9d4.
+  status: varchar({ length: 32 }).default("lead").notNull(),
   // Publish this partner's logo on the public events it's linked to (off by
   // default — partners are internal until an exec opts one in).
   showOnWebsite: boolean("show_on_website").default(false).notNull(),

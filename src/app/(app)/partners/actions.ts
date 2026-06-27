@@ -14,11 +14,19 @@ import { logMutation } from "@/lib/usage";
 
 export type FormState = ActionResult;
 
+const PARTNER_STATUS_SET = new Set(["lead", "contacted", "active", "inactive"]);
+
 function parsePartner(fd: FormData) {
+  const status = str(fd, "status");
   return {
     name: str(fd, "name") ?? "",
     website: str(fd, "website"),
+    email: str(fd, "email"),
+    instagram: str(fd, "instagram"),
+    linkedin: str(fd, "linkedin"),
+    facebook: str(fd, "facebook"),
     notes: str(fd, "notes"),
+    status: status && PARTNER_STATUS_SET.has(status) ? status : "lead",
     showOnWebsite: bool(fd, "show_on_website"),
   };
 }
