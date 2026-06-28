@@ -9,9 +9,15 @@ import { RelatedTasks } from "@/components/related-tasks";
 import { Badge, Card, PageHeader, SectionCard, buttonSecondary } from "@/components/ui";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { requireModule } from "@/lib/dal";
+import { eventSiteLink } from "@/lib/event-links";
 import { formatAUD, formatDate, formatTime, initials, todayISO } from "@/lib/format";
-import { dusaVariant, eventStatusVariant } from "@/lib/options";
-import { getEventById, getPeopleOptions } from "@/lib/queries";
+import {
+  FLAGSHIP_STATE_LABELS,
+  dusaVariant,
+  eventStatusVariant,
+  flagshipStateVariant,
+} from "@/lib/options";
+import { getEventById, getFlagshipSignups, getPeopleOptions } from "@/lib/queries";
 import { getEventOwners } from "@/lib/owners";
 import { canAccess, canManageRelatedTasks, canWrite } from "@/lib/rbac";
 import { fetchReviewSummary } from "@/lib/reviews";
@@ -28,6 +34,7 @@ import {
 import { setEventPublished } from "../actions";
 import { ReviewPanel } from "../review-panel";
 import { EventDocuments } from "./event-documents";
+import { FlagshipSignups } from "./flagship-signups";
 
 export default async function EventDetailPage({
   params,
@@ -73,6 +80,19 @@ export default async function EventDetailPage({
   if (!event) notFound();
 
   const reviewSummary = event.reviewFormId ? await fetchReviewSummary(eventId) : null;
+  // Flagship marketing funnel — only loaded for flagship events (the
+  // `flagship_signup` table is read-only here, created by the dsec-api migration).
+  const flagshipSignups = event.isFlagship ? await getFlagshipSignups(eventId) : [];
+
+  // "View event" (published → live page) / "Preview" (draft → temporary signed
+  // link on the public site). url is null when the website origin / API isn't
+  // configured, in which case the button is hidden.
+  const siteLink = await eventSiteLink({
+    id: eventId,
+    name: event.name,
+    startDate: event.startDate,
+    isPublic: event.isPublic,
+  });
 
   const leadName = people.find((p) => p.id === event.eventLeadId)?.name ?? null;
   // Primary lead first, then co-leads (event_owner). Label flips to plural.
@@ -117,16 +137,35 @@ export default async function EventDetailPage({
           { label: event.name },
         ]}
         action={
-          writable ? (
+          siteLink.url || writable ? (
             <div className="flex items-center gap-2">
-              <PublishToggle
-                published={event.isPublic}
-                action={setEventPublished.bind(null, eventId)}
-                blockedReason={event.startDate ? undefined : "Add a start date before publishing"}
-              />
-              <Link href={`/events/${eventId}/edit`} className={buttonSecondary}>
-                Edit
-              </Link>
+              {siteLink.url && (
+                <a
+                  href={siteLink.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className={buttonSecondary}
+                  title={
+                    siteLink.preview
+                      ? "Preview this draft on the public site (private, expiring link)"
+                      : "Open the live event page on the public site"
+                  }
+                >
+                  {siteLink.label} ↗
+                </a>
+              )}
+              {writable && (
+                <>
+                  <PublishToggle
+                    published={event.isPublic}
+                    action={setEventPublished.bind(null, eventId)}
+                    blockedReason={event.startDate ? undefined : "Add a start date before publishing"}
+                  />
+                  <Link href={`/events/${eventId}/edit`} className={buttonSecondary}>
+                    Edit
+                  </Link>
+                </>
+              )}
             </div>
           ) : undefined
         }
@@ -136,6 +175,11 @@ export default async function EventDetailPage({
         <Badge variant={event.isPublic ? "success" : "warning"}>
           {event.isPublic ? "Published" : "Draft"}
         </Badge>
+        {event.isFlagship && (
+          <Badge variant={flagshipStateVariant(event.flagshipState)}>
+            Flagship · {FLAGSHIP_STATE_LABELS[event.flagshipState ?? "teaser"] ?? "Teaser"}
+          </Badge>
+        )}
         <Badge variant={eventStatusVariant(event.status)}>{event.status ?? "—"}</Badge>
         {event.foodProvided && <Badge variant="success">Food provided</Badge>}
         {event.externalGuests && <Badge variant="neutral">External guests</Badge>}
@@ -220,6 +264,19 @@ export default async function EventDetailPage({
             <Markdown content={event.description} />
           </div>
         </SectionCard>
+      )}
+
+      {event.isFlagship && (
+        <div className="mb-6">
+          <FlagshipSignups
+            eventId={eventId}
+            eventName={event.name}
+            theme={event.flagshipTheme}
+            state={event.flagshipState}
+            signups={flagshipSignups}
+            canWrite={writable}
+          />
+        </div>
       )}
 
       {speakers.length > 0 && (

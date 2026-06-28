@@ -1,9 +1,11 @@
+import { MediaManager } from "@/components/media-manager";
 import { Badge, PageHeader, SectionCard } from "@/components/ui";
 import { requireUser } from "@/lib/dal";
 import { ensurePersonForUser } from "@/lib/person-link";
 import { getPersonById } from "@/lib/queries";
-import { getMemberByStudentId } from "@/lib/workspace-queries";
+import { getMedia, getMemberByStudentId } from "@/lib/workspace-queries";
 
+import { deleteOwnPhoto, uploadOwnPhoto } from "../actions";
 import { ChangeEmailForm } from "../change-email-form";
 import { ProfileForm } from "../profile-form";
 
@@ -15,7 +17,10 @@ export default async function ProfileSettingsPage() {
   const person = await getPersonById(personId);
   if (!person) throw new Error("Profile record missing after linking.");
 
-  const member = await getMemberByStudentId(person.studentId);
+  const [member, photos] = await Promise.all([
+    getMemberByStudentId(person.studentId),
+    getMedia("person", personId),
+  ]);
 
   return (
     <>
@@ -58,6 +63,16 @@ export default async function ProfileSettingsPage() {
       </div>
 
       <div className="max-w-2xl space-y-6">
+        {/* Self-service headshot — owner-scoped upload/delete (no people-write
+            needed), the same photo that powers the public team grid + lead
+            avatars. */}
+        <MediaManager
+          entityType="person"
+          entityId={personId}
+          existing={photos}
+          uploadAction={uploadOwnPhoto}
+          deleteAction={deleteOwnPhoto}
+        />
         <ProfileForm person={person} />
         <ChangeEmailForm currentEmail={user.email} />
       </div>

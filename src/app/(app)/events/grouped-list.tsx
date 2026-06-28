@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Icons } from "@/components/icons";
 import { Badge, EmptyState } from "@/components/ui";
 import { cn, formatDate, formatTime } from "@/lib/format";
-import { dusaVariant, eventStatusVariant } from "@/lib/options";
+import { dusaVariant, eventStatusVariant, flagshipStateVariant } from "@/lib/options";
 import type { EventGroup } from "@/lib/event-view-helpers";
 import type { EventWithLead } from "@/lib/queries";
 
@@ -45,6 +45,7 @@ export function EventRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {e.isFlagship && <Badge variant={flagshipStateVariant(e.flagshipState)}>Flagship</Badge>}
         {!e.isPublic && <Badge variant="warning">Draft</Badge>}
         {e.status !== "Completed" && (
           <Badge variant={dusaVariant(e.dusaSubmissionStatus)}>{e.dusaSubmissionStatus ?? "—"}</Badge>

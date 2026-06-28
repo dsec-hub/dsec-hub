@@ -149,12 +149,32 @@ export const events = pgTable("events", {
 	// hidden from the public website; the dashboard publishes them. Mirrors
 	// projects.is_public. Added via Alembic (a9f3c1e7d2b4) — dsec-api owns events.
 	isPublic: boolean("is_public").default(false).notNull(),
+	// --- Flagship event marketing feature (app-owned additive columns, added by
+	// scripts/add-event-flagship-columns.ts, NOT Alembic). A flagship is a marquee
+	// event with a bespoke website template and a teaser→revealed lifecycle: the
+	// teaser state hides the real specifics behind a secret headline + countdown +
+	// email funnel; flipping to revealed declassifies it to the full page. Mirrors
+	// the is_public publish pattern. See FLAGSHIP_CONTRACT.md. ---
+	isFlagship: boolean("is_flagship").default(false).notNull(),
+	// Which website template renders this flagship: arena | blueprint | nightrun.
+	// NOT NULL with a default in Neon (the website always needs a template/lifecycle
+	// to render) — inert unless is_flagship is true.
+	flagshipTheme: varchar("flagship_theme", { length: 16 }).default("arena").notNull(),
+	// Lifecycle: teaser (secret) → revealed (full page).
+	flagshipState: varchar("flagship_state", { length: 16 }).default("teaser").notNull(),
+	// Secret-state headline (e.g. "OPERATION DUCKSHOT") + Markdown blurb, shown
+	// only while in the teaser state.
+	flagshipTeaserTitle: varchar("flagship_teaser_title", { length: 256 }),
+	flagshipTeaserBody: text("flagship_teaser_body"),
+	// Countdown target; the website falls back to start_date when null.
+	flagshipRevealAt: timestamp("flagship_reveal_at", { withTimezone: true, mode: 'string' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	archived: boolean().default(false).notNull(),
 }, (table) => [
 	index("ix_events_archived").using("btree", table.archived.asc().nullsLast().op("bool_ops")),
 	index("ix_events_is_public").using("btree", table.isPublic.asc().nullsLast().op("bool_ops")),
+	index("ix_events_is_flagship").using("btree", table.isFlagship.asc().nullsLast().op("bool_ops")),
 	index("ix_events_dusa_deadline").using("btree", table.dusaDeadline.asc().nullsLast().op("date_ops")),
 	index("ix_events_dusa_submission_status").using("btree", table.dusaSubmissionStatus.asc().nullsLast().op("text_ops")),
 	index("ix_events_event_lead_id").using("btree", table.eventLeadId.asc().nullsLast().op("int4_ops")),
@@ -165,6 +185,42 @@ export const events = pgTable("events", {
 			foreignColumns: [people.id],
 			name: "events_event_lead_id_fkey"
 		}),
+]);
+
+// --- Flagship signups (the email-marketing funnel sink for a flagship event's
+// teaser page: "notify me" captures + sponsor enquiries). The TABLE is created
+// by the dsec-api migration; the hub only READS it (the event detail page's
+// signups panel + CSV export). Mirrors the API `flagship_signup` schema —
+// see FLAGSHIP_CONTRACT.md. ---
+
+export const flagshipSignups = pgTable("flagship_signup", {
+	id: serial().primaryKey().notNull(),
+	eventId: integer("event_id").notNull(),
+	// notify | sponsor
+	kind: varchar({ length: 16 }).notNull(),
+	email: varchar({ length: 320 }).notNull(),
+	name: varchar({ length: 256 }),
+	// sponsor-only context
+	company: varchar({ length: 256 }),
+	message: text(),
+	// where the signup came from, e.g. "website"
+	source: varchar({ length: 64 }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	archived: boolean().default(false).notNull(),
+}, (table) => [
+	// Idempotent re-submits: one (event, kind, email) tuple at most.
+	uniqueIndex("ix_flagship_signup_event_kind_email").using(
+		"btree",
+		table.eventId.asc().nullsLast().op("int4_ops"),
+		table.kind.asc().nullsLast().op("text_ops"),
+		table.email.asc().nullsLast().op("text_ops"),
+	),
+	index("ix_flagship_signup_event_id").using("btree", table.eventId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.eventId],
+			foreignColumns: [events.id],
+			name: "flagship_signup_event_id_fkey"
+		}).onDelete("cascade"),
 ]);
 
 export const sponsors = pgTable("sponsors", {

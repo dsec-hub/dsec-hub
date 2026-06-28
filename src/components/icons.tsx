@@ -178,6 +178,12 @@ export const Icons = {
       <path d="M10 12h4" />
     </svg>
   ),
+  flagship: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <path d="M5 21V4" />
+      <path d="M5 4.5h12l-2.5 4 2.5 4H5" />
+    </svg>
+  ),
   eye: (p: IconProps) => (
     <svg {...base} className={p.className} aria-hidden>
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />

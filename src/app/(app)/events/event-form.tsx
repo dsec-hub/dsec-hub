@@ -26,6 +26,10 @@ import {
   EVENT_FORMATS,
   EVENT_STATUSES,
   EVENT_TYPES,
+  FLAGSHIP_STATE_LABELS,
+  FLAGSHIP_STATES,
+  FLAGSHIP_THEME_LABELS,
+  FLAGSHIP_THEMES,
 } from "@/lib/options";
 import type { FormState } from "./actions";
 import type { EventRow } from "@/lib/queries";
@@ -116,6 +120,9 @@ export function EventForm({
     !!e?.endDate && e.endDate !== e.startDate,
   );
   const [status, setStatus] = useState(e?.status ?? "Idea");
+  // Flagship is opt-in; its template/teaser fields only render once checked
+  // (mirrors the status-driven conditional rendering idiom above).
+  const [isFlagship, setIsFlagship] = useState(e?.isFlagship ?? false);
 
   // An event auto-completes once its start date is in the past — a completed
   // event already happened, so DUSA, scheduling and ticketing are moot. We
@@ -375,6 +382,79 @@ export function EventForm({
       <Field label="Description" hint="Shown on the public website. Markdown supported.">
         <TextArea name="description" rows={8} defaultValue={e?.description ?? ""} />
       </Field>
+
+      <fieldset className="rounded-xl border border-border p-4">
+        <legend className="px-1 text-xs text-muted">Flagship</legend>
+        <div className="space-y-5">
+          <CheckboxField
+            label="Mark as flagship event"
+            name="is_flagship"
+            checked={isFlagship}
+            onChange={(ev) => setIsFlagship(ev.target.checked)}
+          />
+          {isFlagship && (
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Template theme"
+                hint="Which bespoke website template renders the teaser + reveal pages."
+              >
+                <SelectField name="flagship_theme" defaultValue={e?.flagshipTheme ?? "arena"}>
+                  {FLAGSHIP_THEMES.map((t) => (
+                    <option key={t} value={t}>
+                      {FLAGSHIP_THEME_LABELS[t]}
+                    </option>
+                  ))}
+                </SelectField>
+              </Field>
+              <Field
+                label="State"
+                hint="Teaser hides the real specifics; Revealed shows the full event page."
+              >
+                <SelectField name="flagship_state" defaultValue={e?.flagshipState ?? "teaser"}>
+                  {FLAGSHIP_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {FLAGSHIP_STATE_LABELS[s]}
+                    </option>
+                  ))}
+                </SelectField>
+              </Field>
+              <div className="sm:col-span-2">
+                <Field
+                  label="Secret teaser title"
+                  hint="Headline shown while teased, before the reveal (e.g. “OPERATION DUCKSHOT”)."
+                >
+                  <TextInput
+                    name="flagship_teaser_title"
+                    defaultValue={e?.flagshipTeaserTitle ?? ""}
+                    placeholder="OPERATION DUCKSHOT"
+                  />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field
+                  label="Secret teaser body"
+                  hint="Teaser blurb shown before the reveal. Markdown supported."
+                >
+                  <TextArea
+                    name="flagship_teaser_body"
+                    rows={5}
+                    defaultValue={e?.flagshipTeaserBody ?? ""}
+                  />
+                </Field>
+              </div>
+              <Field
+                label="Reveal date"
+                hint="Optional countdown target. Falls back to the start date when unset."
+              >
+                <DateField
+                  name="flagship_reveal_at"
+                  defaultValue={e?.flagshipRevealAt?.slice(0, 10) ?? ""}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+      </fieldset>
 
       <p className="rounded-xl border border-border bg-surface px-4 py-3 text-xs text-muted">
         Sponsors and partners are linked from their own sections (below on the

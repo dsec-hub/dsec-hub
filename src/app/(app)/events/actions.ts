@@ -8,7 +8,7 @@ import { events, finance } from "@/db/schema";
 import { requireWrite } from "@/lib/dal";
 import { bool, int, str, tierList } from "@/lib/form-data";
 import { coOwnerIdsOf, setEventOwners } from "@/lib/owners";
-import { DUSA_STATUSES } from "@/lib/options";
+import { DUSA_STATUSES, FLAGSHIP_STATES } from "@/lib/options";
 import { apiEnv } from "@/lib/api-env";
 import { revalidateWebsite } from "@/lib/revalidate-website";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
@@ -40,6 +40,17 @@ function parseEvent(fd: FormData) {
     expectedAttendance: int(fd, "expected_attendance"),
     actualAttendance: int(fd, "actual_attendance"),
     description: str(fd, "description"),
+    // Flagship marketing fields. When the "Mark as flagship" box is unchecked the
+    // dependent inputs aren't rendered, so theme/state read back as null. Those two
+    // columns are NOT NULL with canonical defaults ('arena'/'teaser') — fall back to
+    // them so the write is valid; the values are inert on the website unless
+    // is_flagship is true. Unchecking flagship clears the rest of its config below.
+    isFlagship: bool(fd, "is_flagship"),
+    flagshipTheme: str(fd, "flagship_theme") ?? "arena",
+    flagshipState: str(fd, "flagship_state") ?? "teaser",
+    flagshipTeaserTitle: str(fd, "flagship_teaser_title"),
+    flagshipTeaserBody: str(fd, "flagship_teaser_body"),
+    flagshipRevealAt: str(fd, "flagship_reveal_at"),
   };
 }
 
@@ -115,6 +126,66 @@ export async function setEventPublished(id: number, published: boolean): Promise
     .where(eq(events.id, id));
   await revalidateEvents();
   return { ok: true, message: published ? "Event published" : "Moved to draft", undo };
+}
+
+/**
+ * Quick-toggle an event's flagship flag (the marquee marketing treatment with a
+ * bespoke website template + teaser/reveal lifecycle). Turning it ON is gated on
+ * a secret teaser title existing, so a flagship can't go live with an empty
+ * headline; enabling also seeds sensible theme/state defaults so the website
+ * always has a template + lifecycle to render. Mirrors setEventPublished;
+ * reversible via undo.
+ */
+export async function setEventFlagship(id: number, isFlagship: boolean): Promise<FormState> {
+  await requireWrite("events");
+  // Seed defaults only when first enabling; null on the off-path.
+  let seed: { flagshipTheme: string; flagshipState: string } | null = null;
+  if (isFlagship) {
+    const [e] = await db
+      .select({
+        teaserTitle: events.flagshipTeaserTitle,
+        theme: events.flagshipTheme,
+        state: events.flagshipState,
+      })
+      .from(events)
+      .where(eq(events.id, id))
+      .limit(1);
+    if (!e) return { error: "Event not found." };
+    if (!e.teaserTitle) {
+      return { error: "Add a secret teaser title before marking this flagship." };
+    }
+    seed = { flagshipTheme: e.theme ?? "arena", flagshipState: e.state ?? "teaser" };
+  }
+  const undo = await snapshotForUpdate("event", id);
+  await db
+    .update(events)
+    .set({ isFlagship, ...(seed ?? {}), updatedAt: new Date().toISOString() })
+    .where(eq(events.id, id));
+  await revalidateEvents();
+  return { ok: true, message: isFlagship ? "Marked as flagship" : "Flagship removed", undo };
+}
+
+/**
+ * Flip a flagship event between teaser (secret) and revealed (full page) — the
+ * one switch that declassifies the event on the public website. Mirrors
+ * setEventPublished; reversible via undo.
+ */
+export async function setFlagshipState(id: number, state: string): Promise<FormState> {
+  await requireWrite("events");
+  if (!FLAGSHIP_STATES.includes(state as (typeof FLAGSHIP_STATES)[number])) {
+    return { error: "Invalid flagship state." };
+  }
+  const undo = await snapshotForUpdate("event", id);
+  await db
+    .update(events)
+    .set({ flagshipState: state, updatedAt: new Date().toISOString() })
+    .where(eq(events.id, id));
+  await revalidateEvents();
+  return {
+    ok: true,
+    message: state === "revealed" ? "Flagship revealed" : "Reset to teaser",
+    undo,
+  };
 }
 
 export async function archiveEvent(id: number): Promise<FormState> {

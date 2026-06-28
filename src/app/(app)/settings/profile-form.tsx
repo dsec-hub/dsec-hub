@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Field, FormError, TextArea, TextInput } from "@/components/form";
+import { CheckboxField, Field, FormError, TextArea, TextInput } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
 import { useActionToast } from "@/lib/use-action-toast";
 import type { PersonRow } from "@/lib/queries";
@@ -54,7 +54,34 @@ export function ProfileForm({ person }: { person: PersonRow }) {
         </div>
       </fieldset>
 
-      <Field label="Notes">
+      <fieldset className="rounded-xl border border-border p-4">
+        <legend className="px-1 text-xs text-muted">Public profile</legend>
+        <div className="space-y-5">
+          <Field
+            label="Bio"
+            hint="A public one-line intro shown under your name on the website team grid. Separate from your internal Notes below."
+          >
+            <TextArea
+              name="bio"
+              defaultValue={p.bio ?? ""}
+              placeholder="e.g. Leads web projects and runs React/Next.js workshops."
+            />
+          </Field>
+          <div className="space-y-1">
+            <CheckboxField
+              label="Show my profile on the public website"
+              name="show_on_website"
+              defaultChecked={p.showOnWebsite ?? false}
+            />
+            <p className="pl-[26px] text-xs text-muted">
+              Publishes you on the public team grid at dsec.club. Add a profile photo and a
+              bio above for the best look. Leave unchecked to stay private.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <Field label="Notes" hint="Internal — never shown on the public site.">
         <TextArea name="notes" defaultValue={p.notes ?? ""} />
       </Field>
 

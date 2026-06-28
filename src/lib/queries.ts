@@ -15,7 +15,7 @@ import {
 import { count } from "drizzle-orm";
 
 import { db } from "@/db";
-import { appSetting, events, finance, people, sponsorLeads, sponsorPackages, sponsors } from "@/db/schema";
+import { appSetting, events, finance, flagshipSignups, people, sponsorLeads, sponsorPackages, sponsors } from "@/db/schema";
 import { todayISO } from "@/lib/format";
 
 function addDaysISO(iso: string, days: number): string {
@@ -135,6 +135,26 @@ export async function getDusaPipeline(): Promise<EventWithLead[]> {
 export async function getEventById(id: number): Promise<EventRow | null> {
   const [row] = await db.select().from(events).where(eq(events.id, id)).limit(1);
   return row ?? null;
+}
+
+export type FlagshipSignupRow = typeof flagshipSignups.$inferSelect;
+
+/**
+ * Email-funnel signups for a flagship event's teaser page (the "notify me"
+ * captures + sponsor enquiries). Read-only here: the `flagship_signup` table is
+ * created by the dsec-api migration, so this tolerates its absence (returns [])
+ * until that ships — the event page never hard-crashes.
+ */
+export async function getFlagshipSignups(eventId: number): Promise<FlagshipSignupRow[]> {
+  try {
+    return await db
+      .select()
+      .from(flagshipSignups)
+      .where(and(eq(flagshipSignups.eventId, eventId), eq(flagshipSignups.archived, false)))
+      .orderBy(desc(flagshipSignups.createdAt));
+  } catch {
+    return [];
+  }
 }
 
 /** Active people for relation <select>s (event lead, sponsor contact). */

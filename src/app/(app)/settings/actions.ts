@@ -4,23 +4,128 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
+import type { MediaState } from "@/app/(app)/media/actions";
 import { db } from "@/db";
 import { appUser, people } from "@/db/schema";
+import { apiEnv } from "@/lib/api-env";
 import { requireUser } from "@/lib/dal";
-import { str } from "@/lib/form-data";
+import { bool, str } from "@/lib/form-data";
 import { hashPassword, validatePassword } from "@/lib/password";
 import { ensurePersonForUser } from "@/lib/person-link";
+import { revalidateWebsite } from "@/lib/revalidate-website";
+import { getMedia } from "@/lib/workspace-queries";
 
 export type FormState = { error?: string; ok?: boolean } | undefined;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Revalidate everywhere a member's own headshot is shown (their profile page,
+ *  the roster, the sidebar avatar) plus the public team grid. */
+async function revalidateOwnPhoto() {
+  revalidatePath("/settings/profile");
+  revalidatePath("/people");
+  revalidatePath("/", "layout"); // sidebar avatar
+  await revalidateWebsite("team");
+}
+
+/**
+ * Upload the signed-in member's OWN profile headshot — self-service, scoped to
+ * the person linked to their login (`ensurePersonForUser`), so it needs no
+ * `people` write permission (mirrors `updateProfile`). The entity id is resolved
+ * server-side from the session, never trusted from the form, so a member can
+ * only ever set their own photo. Forwards the (already-cropped) image to
+ * dsec-api `/media` as a person photo and refreshes the public team grid.
+ *
+ * Shaped as `(prevState, formData)` to drop straight into `<MediaManager
+ * uploadAction={…}>`.
+ */
+export async function uploadOwnPhoto(_prev: MediaState, fd: FormData): Promise<MediaState> {
+  const user = await requireUser();
+  const personId = await ensurePersonForUser(user);
+
+  const env = apiEnv();
+  if (!env) {
+    return { error: "Photo upload needs DSEC_API_URL and a write-scoped DSEC_API_KEY." };
+  }
+
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "No image to upload." };
+
+  // Re-pack so only our fields reach the API — and pin entity_id to the
+  // session-resolved person (ignore any client-supplied id).
+  const body = new FormData();
+  body.set("entity_type", "person");
+  body.set("entity_id", String(personId));
+  body.set("role", "photo");
+  const alt = fd.get("alt_text");
+  if (alt) body.set("alt_text", String(alt));
+  body.set("file", file, file instanceof File ? file.name || "headshot.webp" : "headshot.webp");
+
+  try {
+    const res = await fetch(`${env.base}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.key}` },
+      body,
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      return { error: `Upload failed (${res.status}): ${detail.slice(0, 200)}` };
+    }
+    await revalidateOwnPhoto();
+    return { ok: "Photo uploaded." };
+  } catch (e) {
+    return { error: `Could not reach the API: ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Delete one of the signed-in member's OWN profile photos. Object-level auth:
+ * the asset must belong to the person linked to their login — the client-supplied
+ * entity id is ignored, so a member can't delete anyone else's photo by passing a
+ * different id. Shaped as `(id, entityType, entityId)` to match `<MediaManager
+ * deleteAction={…}>`.
+ */
+export async function deleteOwnPhoto(
+  id: number,
+  _entityType: "event" | "project" | "sponsor" | "speaker" | "person" | "partner",
+  _entityId: number,
+): Promise<MediaState> {
+  const user = await requireUser();
+  const personId = await ensurePersonForUser(user);
+
+  const env = apiEnv();
+  if (!env) return { error: "Photo management needs DSEC_API_URL and DSEC_API_KEY." };
+
+  // Re-bind the id to THIS user's person before deleting (the args are
+  // client-supplied; the session person is the source of truth).
+  const mine = await getMedia("person", personId);
+  if (!mine.some((m) => m.id === id)) return { error: "That photo isn't on your profile." };
+
+  try {
+    const res = await fetch(`${env.base}/media/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.key}` },
+    });
+    if (!res.ok && res.status !== 404) {
+      const detail = await res.text();
+      return { error: `Delete failed (${res.status}): ${detail.slice(0, 200)}` };
+    }
+    await revalidateOwnPhoto();
+    return { ok: "Photo removed." };
+  } catch (e) {
+    return { error: `Could not reach the API: ${(e as Error).message}` };
+  }
+}
+
 /**
  * Update the signed-in user's own profile — the login name (`app_user`) and the
- * linked roster record (`people`: student id, socials, notes). Name is kept in
+ * linked roster record (`people`: student id, socials, notes, public bio +
+ * website visibility). This is self-service and only needs a signed-in user — no
+ * `people` write permission — so view-only members can still maintain their own
+ * details and choose whether to appear on the public team grid. Name is kept in
  * sync across the two tables. Email is a sign-in credential, so it's changed
  * separately via `changeEmail` (which re-verifies the password). Role/committee
- * stay admin-assigned and aren't editable here.
+ * and display order stay admin-assigned and aren't editable here.
  */
 export async function updateProfile(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireUser();
@@ -45,6 +150,8 @@ export async function updateProfile(_prev: FormState, fd: FormData): Promise<For
       linkedin: str(fd, "linkedin"),
       website: str(fd, "website"),
       notes: str(fd, "notes"),
+      bio: str(fd, "bio"),
+      showOnWebsite: bool(fd, "show_on_website"),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(people.id, personId));
@@ -52,6 +159,9 @@ export async function updateProfile(_prev: FormState, fd: FormData): Promise<For
   revalidatePath("/settings");
   revalidatePath("/people");
   revalidatePath("/", "layout"); // refresh the sidebar name/initials
+  // The public roster (/website/team) is tagged "team" — refresh it so a
+  // self-service publish/unpublish takes effect on the live site.
+  await revalidateWebsite("team");
   return { ok: true };
 }
 

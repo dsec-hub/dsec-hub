@@ -49,7 +49,7 @@ const ROLES_BY_ENTITY: Record<EntityType, RoleDef[]> = {
     { value: "logo", label: "Logo", aspect: undefined, hint: "Brand logo — transparent PNG works best; crop freely" },
   ],
   partner: [
-    { value: "logo", label: "Logo", aspect: 1, hint: "Brand logo — square 1:1; transparent PNG works best" },
+    { value: "logo", label: "Logo", aspect: undefined, hint: "Brand logo — transparent PNG works best; crop freely" },
   ],
   speaker: [
     { value: "photo", label: "Photo", aspect: 1, hint: "Headshot — square 1:1" },
@@ -129,12 +129,21 @@ function PendingLabel({
   );
 }
 
+export type UploadAction = (prev: MediaState, fd: FormData) => Promise<MediaState>;
+export type DeleteAction = (
+  id: number,
+  entityType: EntityType,
+  entityId: number,
+) => Promise<MediaState>;
+
 export function MediaManager({
   entityType,
   entityId,
   existing,
   canWrite = true,
   emptyOverride,
+  uploadAction = uploadMedia,
+  deleteAction = deleteMedia,
 }: {
   entityType: EntityType;
   entityId: number;
@@ -144,6 +153,11 @@ export function MediaManager({
   // speaker is showing an inherited profile photo, so uploading here reads as
   // an *override* rather than implying nothing is set.
   emptyOverride?: React.ReactNode;
+  // Override the upload/delete server actions. Defaults to the admin (people /
+  // events / … write-gated) actions; the self-service profile page injects
+  // owner-scoped variants so a view-only member can manage their OWN headshot.
+  uploadAction?: UploadAction;
+  deleteAction?: DeleteAction;
 }) {
   const [open, setOpen] = useState(false);
   const copy = SECTION_COPY[entityType];
@@ -172,6 +186,7 @@ export function MediaManager({
               entityType={entityType}
               entityId={entityId}
               canWrite={canWrite}
+              deleteAction={deleteAction}
             />
           ))}
         </div>
@@ -183,6 +198,7 @@ export function MediaManager({
             entityType={entityType}
             entityId={entityId}
             onDone={() => setOpen(false)}
+            uploadAction={uploadAction}
           />
         </Modal>
       )}
@@ -195,11 +211,13 @@ function MediaCard({
   entityType,
   entityId,
   canWrite,
+  deleteAction,
 }: {
   item: MediaItem;
   entityType: EntityType;
   entityId: number;
   canWrite: boolean;
+  deleteAction: DeleteAction;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | undefined>();
@@ -208,7 +226,7 @@ function MediaCard({
     if (!confirm("Remove this image? This cannot be undone.")) return;
     setError(undefined);
     start(async () => {
-      const res = await deleteMedia(item.id, entityType, entityId);
+      const res = await deleteAction(item.id, entityType, entityId);
       if (res?.error) {
         setError(res.error);
         toast.error(res.error);
@@ -266,10 +284,12 @@ function Uploader({
   entityType,
   entityId,
   onDone,
+  uploadAction,
 }: {
   entityType: EntityType;
   entityId: number;
   onDone: () => void;
+  uploadAction: UploadAction;
 }) {
   const roles = ROLES_BY_ENTITY[entityType];
   const singleRole = roles.length === 1;
@@ -280,6 +300,8 @@ function Uploader({
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [area, setArea] = useState<Area | null>(null);
+  // Logos match the crop frame to the image's own aspect (set on media load).
+  const [logoAspect, setLogoAspect] = useState<number | undefined>(undefined);
   const [state, setState] = useState<MediaState>();
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [statuses, setStatuses] = useState<("ok" | "err")[]>([]);
@@ -287,6 +309,7 @@ function Uploader({
   const [pending, start] = useTransition();
 
   const bulk = files.length > 1;
+  const isLogo = role.value === "logo";
 
   // Revoke object URLs whenever the selection changes / on unmount.
   useEffect(() => {
@@ -307,6 +330,7 @@ function Uploader({
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setArea(null);
+    setLogoAspect(undefined);
     setFiles([]);
     setPreviews([]);
 
@@ -337,7 +361,7 @@ function Uploader({
     fd.set("role", role.value);
     if (altText?.trim()) fd.set("alt_text", altText.trim());
     fd.set("file", blob, name);
-    return uploadMedia(undefined, fd);
+    return uploadAction(undefined, fd);
   };
 
   const onUpload = () => {
@@ -456,7 +480,17 @@ function Uploader({
               image={previews[0]}
               crop={crop}
               zoom={zoom}
-              aspect={role.aspect}
+              // Logos: match the frame to the image's own aspect so it isn't
+              // forced into react-easy-crop's default 4:3, and allow zoom < 1
+              // (restrictPosition off) to pad the mark out to any size.
+              aspect={isLogo ? logoAspect : role.aspect}
+              minZoom={isLogo ? 0.3 : 1}
+              restrictPosition={!isLogo}
+              onMediaLoaded={
+                isLogo
+                  ? (m) => setLogoAspect(m.naturalWidth / m.naturalHeight)
+                  : undefined
+              }
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
@@ -466,7 +500,7 @@ function Uploader({
             <span className="shrink-0">Zoom</span>
             <input
               type="range"
-              min={1}
+              min={isLogo ? 0.3 : 1}
               max={3}
               step={0.01}
               value={zoom}
@@ -474,6 +508,12 @@ function Uploader({
               className="w-full accent-[var(--color-accent)]"
             />
           </label>
+          {isLogo && (
+            <p className="-mt-1 text-xs text-muted">
+              Zoom out below 1× to frame the whole logo with transparent padding —
+              any size or aspect.
+            </p>
+          )}
           <Field label="Alt text" hint="Describes the image for accessibility (optional).">
             <TextInput
               value={alt}

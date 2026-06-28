@@ -159,6 +159,34 @@ export function partnerStatusVariant(status: string | null | undefined): BadgeVa
   }
 }
 
+// Flagship event marketing templates — dsec-website renders the matching one.
+// "Vault" is a demo-only theme and intentionally NOT offered to the committee.
+export const FLAGSHIP_THEMES = ["arena", "blueprint", "nightrun"] as const;
+
+export const FLAGSHIP_THEME_LABELS: Record<string, string> = {
+  arena: "Arena",
+  blueprint: "Blueprint",
+  nightrun: "Night Run",
+};
+
+// Flagship lifecycle: teaser (secret idea + countdown + email funnel) → revealed
+// (the full, declassified event page). The committee flips one switch.
+export const FLAGSHIP_STATES = ["teaser", "revealed"] as const;
+
+export const FLAGSHIP_STATE_LABELS: Record<string, string> = {
+  teaser: "Teaser",
+  revealed: "Revealed",
+};
+
+export function flagshipStateVariant(state: string | null | undefined): BadgeVariant {
+  switch (state) {
+    case "revealed":
+      return "success";
+    default:
+      return "accent"; // teaser (secret)
+  }
+}
+
 export const FINANCE_TYPES = [
   "Grant",
   "Sponsorship Income",
