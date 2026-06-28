@@ -14,6 +14,8 @@ import {
   events,
   financeReports,
   financeTransactions,
+  linkProfile,
+  links,
   mediaAssets,
   meetings,
   memberReports,
@@ -739,6 +741,40 @@ export async function getPartnerEvents(partnerId: number) {
       ),
     )
     .orderBy(desc(events.startDate));
+}
+
+// ===========================================================================
+// Link tree (public /links page)
+// ===========================================================================
+
+export type LinkRow = typeof links.$inferSelect;
+export type LinkProfileRow = typeof linkProfile.$inferSelect;
+
+/** Defaults used when the singleton profile row hasn't been created yet. Mirrors
+ * the DB column defaults so the editor + public page are never empty. */
+export const DEFAULT_LINK_PROFILE = {
+  id: 1,
+  title: "DSEC",
+  tagline: "Deakin Cyber Society",
+  mascot: "duck-mascot",
+} as const;
+
+/** Every non-archived link, in the order they appear on the public page
+ * (display_order asc, created_at asc). Includes hidden links so the editor can
+ * manage them; the public feed (dsec-api) filters on is_visible. */
+export async function getLinks(): Promise<LinkRow[]> {
+  return db
+    .select()
+    .from(links)
+    .where(eq(links.archived, false))
+    .orderBy(asc(links.displayOrder), asc(links.createdAt));
+}
+
+/** The singleton link-tree profile (always row id = 1), or the defaults object
+ * when it hasn't been created yet. */
+export async function getLinkProfile(): Promise<LinkProfileRow | typeof DEFAULT_LINK_PROFILE> {
+  const [row] = await db.select().from(linkProfile).where(eq(linkProfile.id, 1)).limit(1);
+  return row ?? DEFAULT_LINK_PROFILE;
 }
 
 // ===========================================================================

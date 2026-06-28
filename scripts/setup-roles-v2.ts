@@ -26,8 +26,8 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const ALL = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents", "admin"];
-const APP = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents"];
+const ALL = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents", "links", "admin"];
+const APP = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents", "links"];
 
 type ViewConfig = { version: 1; sections: Record<string, boolean>; landingPath?: string; defaultTaskView?: string };
 const sx = (...ids: string[]): Record<string, boolean> => Object.fromEntries(ids.map((id) => [id, true]));
@@ -48,8 +48,8 @@ const TARGETS: TargetRole[] = [
   { name: "Admin", description: "Full access to every module plus user, role, and invite management.", modules: ALL, writeModules: ALL, isSystem: true, viewConfig: vc("/dashboard", "all-tasks", "tasks_due_soon", "upcoming_events", "sponsor_pipeline", "committee_health", "finance_summary") },
   { name: "Exec", description: "Full access to every operational module (no admin panel).", modules: APP, writeModules: APP, isSystem: false, viewConfig: vc("/dashboard", "by-committee", "my_work", "upcoming_events", "sponsor_pipeline", "committee_health", "finance_summary") },
   { name: "Secretary", description: "Runs meetings + records: meetings, documents, action items.", modules: ["meetings", "documents", "people", "tasks"], writeModules: ["meetings", "documents"], isSystem: false, viewConfig: vc("/meetings", "my-work", "my_work", "action_items", "upcoming_meetings", "recent_documents") },
-  { name: "External Affairs Lead", description: "Owns sponsorships + outreach to other clubs/partnerships.", modules: ["sponsors", "partners", "people", "tasks", "events", "meetings"], writeModules: ["sponsors", "partners", "tasks", "meetings"], isSystem: false, viewConfig: vc("/dashboard", "by-committee", "my_work", "action_items", "upcoming_events", "sponsor_pipeline", "partners") },
-  { name: "External Affairs Member", description: "Works the sponsor + partner pipeline.", modules: ["sponsors", "partners", "people", "tasks", "meetings"], writeModules: ["sponsors", "partners"], isSystem: false, viewConfig: vc("/dashboard", "my-work", "my_work", "action_items", "upcoming_meetings", "sponsor_pipeline", "partners") },
+  { name: "External Affairs Lead", description: "Owns sponsorships + outreach to other clubs/partnerships.", modules: ["sponsors", "partners", "people", "tasks", "events", "meetings", "links"], writeModules: ["sponsors", "partners", "tasks", "meetings", "links"], isSystem: false, viewConfig: vc("/dashboard", "by-committee", "my_work", "action_items", "upcoming_events", "sponsor_pipeline", "partners") },
+  { name: "External Affairs Member", description: "Works the sponsor + partner pipeline.", modules: ["sponsors", "partners", "people", "tasks", "meetings", "links"], writeModules: ["sponsors", "partners", "links"], isSystem: false, viewConfig: vc("/dashboard", "my-work", "my_work", "action_items", "upcoming_meetings", "sponsor_pipeline", "partners") },
   { name: "Marketing Lead", description: "Leads marketing content/promo per event.", modules: ["events", "tasks", "people", "documents", "meetings"], writeModules: ["tasks", "meetings"], isSystem: false, viewConfig: vc("/dashboard", "by-committee", "my_work", "tasks_due_soon", "action_items", "upcoming_events", "committee_health") },
   { name: "Marketing Member", description: "Marketing content/promo; edits own tasks.", modules: ["events", "tasks", "people", "meetings"], writeModules: [], isSystem: false, viewConfig: vc("/dashboard", "my-work", "my_work", "action_items", "upcoming_events", "upcoming_meetings") },
   { name: "Design Lead", description: "Leads graphics/post design for events (currently unstaffed).", modules: ["events", "tasks", "people", "documents", "meetings"], writeModules: ["tasks", "documents", "meetings"], isSystem: false, viewConfig: vc("/dashboard", "by-committee", "my_work", "action_items", "upcoming_events", "committee_health", "recent_documents") },

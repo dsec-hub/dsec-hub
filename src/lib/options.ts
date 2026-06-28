@@ -29,6 +29,33 @@ export const DUSA_STATUSES = [
 
 export const EVENT_FORMATS = ["In-person", "Online", "Hybrid"] as const;
 
+/**
+ * The 8 link-tree accents (canonical lowercase). These map to brand colour
+ * tokens in dsec-website's globals.css; the `swatch` here is only an approximate
+ * preview for the dashboard editor's colour chips. `accent` null on a link ⇒ the
+ * public page auto-cycles a colour by visible position. KEEP the names in sync
+ * with the shared link-tree contract + dsec-website.
+ */
+export const LINK_ACCENTS = [
+  { value: "blue", label: "Blue", swatch: "#3b82f6" },
+  { value: "pink", label: "Pink", swatch: "#e91e63" },
+  { value: "yellow", label: "Yellow", swatch: "#f5b700" },
+  { value: "mint", label: "Mint", swatch: "#34d399" },
+  { value: "sky", label: "Sky", swatch: "#38bdf8" },
+  { value: "violet", label: "Violet", swatch: "#8b5cf6" },
+  { value: "lime", label: "Lime", swatch: "#84cc16" },
+  { value: "coral", label: "Coral", swatch: "#fb7185" },
+] as const;
+
+export type LinkAccent = (typeof LINK_ACCENTS)[number]["value"];
+
+export const LINK_ACCENT_VALUES: readonly string[] = LINK_ACCENTS.map((a) => a.value);
+
+/** Swatch hex by accent value (for live previews in the editor). */
+export const LINK_ACCENT_SWATCH: Record<string, string> = Object.fromEntries(
+  LINK_ACCENTS.map((a) => [a.value, a.swatch]),
+);
+
 export const PERSON_TYPES = [
   "Exec",
   "Committee Lead",

@@ -376,6 +376,47 @@ export const eventConnections = pgTable("event_connection", {
   archived: boolean().default(false).notNull(),
 });
 
+// --- link tree -------------------------------------------------------------
+// A mobile-first "Linktree" for DSEC: an ordered stack of styled buttons shown
+// on the public website's chromeless /links page (ideal as the single link in an
+// Instagram / Discord bio). Owned by dsec-api / Alembic; defined ONLY here (fresh
+// tables) so it avoids the schema.ts double-definition trap. The public feed
+// filters on `isVisible` (NOT show_on_website).
+
+export const links = pgTable("link", {
+  id: serial().primaryKey(),
+  // Button label, e.g. "Join the Discord".
+  title: varchar({ length: 120 }).notNull(),
+  // Optional 2nd line, e.g. "500+ members".
+  subtitle: varchar({ length: 160 }),
+  // Destination: http(s)://… or a relative path like /events.
+  url: varchar({ length: 2048 }).notNull(),
+  // A single emoji, e.g. "🎮" (null/empty allowed).
+  icon: varchar({ length: 32 }),
+  // One of the 8 brand accents (blue/pink/yellow/mint/sky/violet/lime/coral);
+  // null ⇒ the public page auto-cycles a colour by visible position.
+  accent: varchar({ length: 16 }),
+  // Ascending order; lower = higher on the page.
+  displayOrder: integer("display_order").default(0).notNull(),
+  // The public feed filters on this (off = hidden from the public page).
+  isVisible: boolean("is_visible").default(true).notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+  updatedAt: ts("updated_at").defaultNow().notNull(),
+  archived: boolean().default(false).notNull(),
+});
+
+// Singleton profile header for the link page (always row id = 1).
+export const linkProfile = pgTable("link_profile", {
+  id: serial().primaryKey(),
+  title: varchar({ length: 60 }).default("DSEC").notNull(),
+  // tagline/mascot are nullable with no server-side default on the actual
+  // Postgres columns — keep the Drizzle definition in sync (no .default()).
+  tagline: varchar({ length: 160 }),
+  // A PixelDuck sprite name (file dsec-website/public/pixel/<mascot>.webp).
+  mascot: varchar({ length: 64 }),
+  updatedAt: ts("updated_at").defaultNow().notNull(),
+});
+
 // --- attachments (PDFs/images) ---------------------------------------------
 // Binaries live in Supabase Storage; this row holds only the URL + metadata.
 // Written by dsec-api (POST /attachments, which auto-compresses); read here.

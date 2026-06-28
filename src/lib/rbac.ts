@@ -12,6 +12,7 @@ export type ModuleKey =
   | "members"
   | "meetings"
   | "documents"
+  | "links"
   | "admin";
 
 export type ModuleDef = {
@@ -35,6 +36,7 @@ export const MODULES: ModuleDef[] = [
   { key: "members", label: "Members", href: "/members", description: "Weekly DUSA membership roster and growth stats." },
   { key: "meetings", label: "Meetings", href: "/meetings", description: "Meeting records and AI-generated minutes." },
   { key: "documents", label: "Docs", href: "/docs", description: "Notion-style docs, meeting notes, and deliverables." },
+  { key: "links", label: "Link Tree", href: "/links", description: "The public link-tree page (profile + ordered link stack)." },
   { key: "admin", label: "Admin", href: "/admin", description: "Manage users, roles, and invites. Implies full access to every module." },
 ];
 

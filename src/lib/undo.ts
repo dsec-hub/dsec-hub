@@ -12,6 +12,7 @@ import {
   eventPartners,
   eventSpeakers,
   eventSponsors,
+  links,
   partners,
   projects,
   taskBoards,
@@ -47,6 +48,7 @@ export const REGISTRY: Record<UndoKey, Reg> = {
   task: { table: tasks, module: "tasks", label: "Task", paths: ["/tasks", "/dashboard", "/"] },
   board: { table: taskBoards, module: "tasks", label: "Board", paths: ["/tasks", "/dashboard", "/"] },
   document: { table: documents, module: "documents", label: "Document", paths: ["/docs", "/dashboard", "/"] },
+  link: { table: links, module: "links", label: "Link", paths: ["/links", "/dashboard", "/"] },
   user: { table: appUser, module: "admin", label: "User", paths: ["/admin/users"] },
   role: { table: appRole, module: "admin", label: "Role", paths: ["/admin/roles", "/admin/users"] },
   committee: {

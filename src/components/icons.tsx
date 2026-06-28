@@ -161,6 +161,37 @@ export const Icons = {
       <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   ),
+  grip: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <circle cx="9" cy="6" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="9" cy="18" r="1" />
+      <circle cx="15" cy="6" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="15" cy="18" r="1" />
+    </svg>
+  ),
+  eye: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  eyeOff: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <path d="M9.9 5.2A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a18.4 18.4 0 0 1-3.2 4.2M6.6 6.6A18.4 18.4 0 0 0 2 12s3.5 7 10 7a10.5 10.5 0 0 0 4.1-.8" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <path d="M3 3l18 18" />
+    </svg>
+  ),
+  trash: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M6 7v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  ),
 };
 
 export type IconName = keyof typeof Icons;
