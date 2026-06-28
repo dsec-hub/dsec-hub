@@ -23,6 +23,7 @@ export type UndoKey =
   | "task"
   | "board"
   | "document"
+  | "meeting"
   | "link"
   | "user"
   | "role"

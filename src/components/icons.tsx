@@ -171,6 +171,13 @@ export const Icons = {
       <circle cx="15" cy="18" r="1" />
     </svg>
   ),
+  archive: (p: IconProps) => (
+    <svg {...base} className={p.className} aria-hidden>
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <path d="M10 12h4" />
+    </svg>
+  ),
   eye: (p: IconProps) => (
     <svg {...base} className={p.className} aria-hidden>
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />

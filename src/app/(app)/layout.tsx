@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 
 import { AppShell, type NavGroup, type NavItem } from "@/components/app-shell";
+import { canSeeArchive } from "@/lib/archive";
 import { getCurrentUser } from "@/lib/dal";
 import { canAccess } from "@/lib/rbac";
 import { canSeeProjects } from "@/lib/scope";
@@ -53,6 +54,15 @@ const NAV: NavSection[] = [
     ],
   },
   {
+    // Cross-cutting recovery surface: every section's archived items in one
+    // place. Gated as a whole (see the `/archive` special-case below) on having
+    // any archivable module; the page itself only shows the types you can access.
+    label: "Archive",
+    items: [
+      { href: "/archive", label: "Archive", icon: "archive" },
+    ],
+  },
+  {
     label: "Admin",
     items: [
       { href: "/admin", label: "Admin", icon: "admin", module: "admin" },
@@ -97,6 +107,7 @@ export default async function AppLayout({
     label: section.label,
     items: section.items
       .filter((n) => {
+        if (n.href === "/archive") return canSeeArchive(user.modules);
         if (!n.module) return true;
         if (n.module === "projects") return projectsVisible;
         return canAccess(user.modules, n.module);
