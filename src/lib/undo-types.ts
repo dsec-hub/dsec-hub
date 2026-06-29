@@ -25,6 +25,7 @@ export type UndoKey =
   | "document"
   | "meeting"
   | "link"
+  | "scan_target"
   | "user"
   | "role"
   | "committee";

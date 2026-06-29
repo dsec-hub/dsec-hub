@@ -25,6 +25,11 @@ type ProfileLike = {
   title: string;
   tagline: string | null;
   mascot: string | null;
+  instagram?: string | null;
+  discord?: string | null;
+  linkedin?: string | null;
+  github?: string | null;
+  email?: string | null;
 };
 
 export function ProfileForm({
@@ -61,6 +66,63 @@ export function ProfileForm({
             ))}
           </SelectField>
         </Field>
+
+        <div className="space-y-1 border-t border-border pt-5">
+          <p className="text-sm font-semibold">Socials</p>
+          <p className="text-xs text-muted">
+            The club&apos;s canonical links. Set them once here and they feed the
+            /links page, the website &amp; portal footers, and the contact / scan
+            / join pages. Leave a field blank to hide that platform everywhere.
+          </p>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Instagram" hint="Full profile URL (https://instagram.com/…).">
+            <TextInput
+              name="instagram"
+              type="url"
+              maxLength={512}
+              placeholder="https://instagram.com/dsec"
+              defaultValue={profile.instagram ?? ""}
+            />
+          </Field>
+          <Field label="Discord" hint="Permanent invite URL (https://discord.gg/…).">
+            <TextInput
+              name="discord"
+              type="url"
+              maxLength={512}
+              placeholder="https://discord.gg/…"
+              defaultValue={profile.discord ?? ""}
+            />
+          </Field>
+          <Field label="LinkedIn" hint="Company/page URL.">
+            <TextInput
+              name="linkedin"
+              type="url"
+              maxLength={512}
+              placeholder="https://www.linkedin.com/company/…"
+              defaultValue={profile.linkedin ?? ""}
+            />
+          </Field>
+          <Field label="GitHub" hint="Org or profile URL.">
+            <TextInput
+              name="github"
+              type="url"
+              maxLength={512}
+              placeholder="https://github.com/dsec-hub"
+              defaultValue={profile.github ?? ""}
+            />
+          </Field>
+          <Field label="Email" hint="Public contact address (shown as a mailto).">
+            <TextInput
+              name="email"
+              type="email"
+              maxLength={254}
+              placeholder="admin@dsec.club"
+              defaultValue={profile.email ?? ""}
+            />
+          </Field>
+        </div>
       </fieldset>
 
       {canWrite && <SubmitButton>Save profile</SubmitButton>}

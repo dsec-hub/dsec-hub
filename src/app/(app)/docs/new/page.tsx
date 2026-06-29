@@ -47,6 +47,13 @@ export default async function NewDocumentPage() {
         committees={committeeOpts.map((c) => c.name)}
         canChooseCommittee={scope.all}
         lockedCommittee={me.userCommittee}
+        pageSection={
+          <p className="rounded-xl border border-dashed border-border bg-surface px-5 py-4 text-sm text-muted">
+            Publishing as a page? Set the type to <strong className="text-foreground">Page</strong> and
+            create the document first — then add content blocks, images, and the public URL on the edit
+            screen. (Images need the saved page&rsquo;s id.)
+          </p>
+        }
       />
     </>
   );

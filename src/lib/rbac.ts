@@ -13,6 +13,7 @@ export type ModuleKey =
   | "meetings"
   | "documents"
   | "links"
+  | "scan"
   | "admin";
 
 export type ModuleDef = {
@@ -37,6 +38,7 @@ export const MODULES: ModuleDef[] = [
   { key: "meetings", label: "Meetings", href: "/meetings", description: "Meeting records and AI-generated minutes." },
   { key: "documents", label: "Docs", href: "/docs", description: "Notion-style docs, meeting notes, and deliverables." },
   { key: "links", label: "Link Tree", href: "/links", description: "The public link-tree page (profile + ordered link stack)." },
+  { key: "scan", label: "Scan Wall", href: "/scan", description: "The public /scan QR wall shown on a screen at events." },
   { key: "admin", label: "Admin", href: "/admin", description: "Manage users, roles, and invites. Implies full access to every module." },
 ];
 

@@ -16,6 +16,7 @@ import {
   meetings,
   partners,
   projects,
+  scanTargets,
   taskBoards,
   tasks,
 } from "@/db/workspace-schema";
@@ -51,6 +52,7 @@ export const REGISTRY: Record<UndoKey, Reg> = {
   document: { table: documents, module: "documents", label: "Document", paths: ["/docs", "/dashboard", "/"] },
   meeting: { table: meetings, module: "meetings", label: "Meeting", paths: ["/meetings", "/dashboard", "/"] },
   link: { table: links, module: "links", label: "Link", paths: ["/links", "/dashboard", "/"] },
+  scan_target: { table: scanTargets, module: "scan", label: "Scan card", paths: ["/scan", "/dashboard", "/"] },
   user: { table: appUser, module: "admin", label: "User", paths: ["/admin/users"] },
   role: { table: appRole, module: "admin", label: "Role", paths: ["/admin/roles", "/admin/users"] },
   committee: {

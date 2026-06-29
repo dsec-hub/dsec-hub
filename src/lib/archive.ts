@@ -13,6 +13,7 @@ import {
   partners,
   people,
   projects,
+  scanTargets,
   sponsors,
   taskBoards,
   tasks,
@@ -41,7 +42,8 @@ export type ArchiveKey =
   | "partner"
   | "sponsor"
   | "finance"
-  | "link";
+  | "link"
+  | "scan_target";
 
 export type ArchivedItem = {
   key: ArchiveKey;
@@ -73,6 +75,7 @@ export const ARCHIVE_META: Record<ArchiveKey, Meta> = {
   sponsor: { module: "sponsors", label: "Sponsors", icon: "sponsors" },
   finance: { module: "finance", label: "Finance", icon: "finance" },
   link: { module: "links", label: "Links", icon: "link" },
+  scan_target: { module: "scan", label: "Scan cards", icon: "camera" },
 };
 
 /** Section order on the Archive page. */
@@ -88,6 +91,7 @@ const ARCHIVE_ORDER: ArchiveKey[] = [
   "sponsor",
   "finance",
   "link",
+  "scan_target",
 ];
 
 /** The distinct modules that own at least one archivable entity. */
@@ -138,6 +142,7 @@ export async function getArchive(user: CurrentUser): Promise<ArchiveGroup[]> {
     sponsorRows,
     financeRows,
     linkRows,
+    scanTargetRows,
   ] = await Promise.all([
     can("events")
       ? db
@@ -232,6 +237,14 @@ export async function getArchive(user: CurrentUser): Promise<ArchiveGroup[]> {
           .orderBy(desc(links.id))
           .limit(LIMIT)
       : empty,
+    can("scan")
+      ? db
+          .select({ id: scanTargets.id, label: scanTargets.label, url: scanTargets.url })
+          .from(scanTargets)
+          .where(eq(scanTargets.archived, true))
+          .orderBy(desc(scanTargets.id))
+          .limit(LIMIT)
+      : empty,
   ]);
 
   const items: Record<ArchiveKey, ArchivedItem[]> = {
@@ -301,6 +314,12 @@ export async function getArchive(user: CurrentUser): Promise<ArchiveGroup[]> {
       key: "link" as const,
       id: r.id,
       title: r.title,
+      subtitle: r.url,
+    })),
+    scan_target: scanTargetRows.map((r) => ({
+      key: "scan_target" as const,
+      id: r.id,
+      title: r.label,
       subtitle: r.url,
     })),
   };

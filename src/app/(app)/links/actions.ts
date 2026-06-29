@@ -126,18 +126,52 @@ export async function reorderLinks(orderedIds: number[]): Promise<FormState> {
   return { ok: true };
 }
 
+/** Normalise a social profile URL field: blank ⇒ null (clears it); otherwise it
+ * must be an absolute http(s) URL. Returns `{ value }` or `{ error }`. */
+function cleanSocialUrl(fd: FormData, name: string, label: string):
+  | { value: string | null }
+  | { error: string } {
+  const raw = (str(fd, name) ?? "").trim();
+  if (!raw) return { value: null };
+  if (raw.length > 512 || !/^https?:\/\//i.test(raw)) {
+    return { error: `${label} must be an https URL (or leave it blank).` };
+  }
+  return { value: raw };
+}
+
 export async function saveLinkProfile(_prev: FormState, fd: FormData): Promise<FormState> {
   const user = await requireWrite("links");
   const title = str(fd, "title") ?? "DSEC";
   const tagline = str(fd, "tagline");
   const mascot = str(fd, "mascot");
+
+  // Socials: blank clears, the four URL fields must be http(s), email is stored
+  // bare (a leading mailto: is stripped). They're the single source served to
+  // every public surface, so validate before persisting.
+  const ig = cleanSocialUrl(fd, "instagram", "Instagram");
+  const dc = cleanSocialUrl(fd, "discord", "Discord");
+  const li = cleanSocialUrl(fd, "linkedin", "LinkedIn");
+  const gh = cleanSocialUrl(fd, "github", "GitHub");
+  for (const r of [ig, dc, li, gh]) if ("error" in r) return { error: r.error };
+  const email = (str(fd, "email") ?? "").trim().replace(/^mailto:/i, "").trim() || null;
+  if (email && (email.length > 254 || !email.includes("@"))) {
+    return { error: "Enter a valid contact email (or leave it blank)." };
+  }
+  const socials = {
+    instagram: (ig as { value: string | null }).value,
+    discord: (dc as { value: string | null }).value,
+    linkedin: (li as { value: string | null }).value,
+    github: (gh as { value: string | null }).value,
+    email,
+  };
+
   // Singleton row id = 1 — upsert so the first save creates it.
   await db
     .insert(linkProfile)
-    .values({ id: 1, title, tagline, mascot })
+    .values({ id: 1, title, tagline, mascot, ...socials })
     .onConflictDoUpdate({
       target: linkProfile.id,
-      set: { title, tagline, mascot, updatedAt: new Date().toISOString() },
+      set: { title, tagline, mascot, ...socials, updatedAt: new Date().toISOString() },
     });
   await logMutation(user, "update", "link_profile", 1);
   await revalidateLinks();

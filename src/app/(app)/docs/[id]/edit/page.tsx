@@ -6,6 +6,8 @@ import { requireModule } from "@/lib/dal";
 import { committeeScopeOf } from "@/lib/scope";
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { cn } from "@/lib/format";
+import { parsePageDoc } from "@/lib/page-blocks";
+import { pagePreviewUrl, pageSiteUrl } from "@/lib/page-links";
 import { canWrite } from "@/lib/rbac";
 import {
   getDocumentById,
@@ -16,8 +18,15 @@ import {
   getTaskOptions,
 } from "@/lib/workspace-queries";
 
-import { archiveDocument, deleteDocument, updateDocument } from "../../actions";
+import {
+  archiveDocument,
+  deleteDocument,
+  setDocumentPublished,
+  updateDocument,
+  uploadPageImage,
+} from "../../actions";
 import { DocumentForm } from "../../document-form";
+import { PagePublishPanel } from "../../page-publish-panel";
 
 export default async function EditDocumentPage({
   params,
@@ -41,6 +50,37 @@ export default async function EditDocumentPage({
     getCommitteeOptions(),
   ]);
   if (!document) notFound();
+
+  // Page-type docs gain a "Publish as page" panel (slug/nav/SEO/cover/blocks +
+  // the Publish toggle). Built server-side so the live/preview links resolve.
+  let pageSection: React.ReactNode = undefined;
+  if (document.type === "Page") {
+    const blocks = parsePageDoc(document.contentJson).blocks;
+    const [previewUrl, siteUrl] = await Promise.all([
+      pagePreviewUrl(documentId),
+      Promise.resolve(pageSiteUrl(document.slug)),
+    ]);
+    pageSection = (
+      <PagePublishPanel
+        docId={documentId}
+        canWrite={writable}
+        published={document.isPublic}
+        slug={document.slug}
+        navLabel={document.navLabel}
+        showInNav={document.showInNav}
+        navArea={document.navArea}
+        navOrder={document.navOrder}
+        seoDescription={document.seoDescription}
+        coverImageUrl={document.coverImageUrl}
+        blocks={blocks}
+        publishAction={setDocumentPublished.bind(null, documentId)}
+        uploadAction={uploadPageImage}
+        previewUrl={previewUrl}
+        siteUrl={siteUrl}
+        websiteOrigin={process.env.DSEC_WEBSITE_URL ?? null}
+      />
+    );
+  }
 
   return (
     <>
@@ -86,6 +126,7 @@ export default async function EditDocumentPage({
         canChooseCommittee={scope.all}
         lockedCommittee={me.userCommittee}
         canWrite={writable}
+        pageSection={pageSection}
       />
     </>
   );

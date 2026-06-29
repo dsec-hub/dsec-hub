@@ -56,6 +56,25 @@ export const LINK_ACCENT_SWATCH: Record<string, string> = Object.fromEntries(
   LINK_ACCENTS.map((a) => [a.value, a.swatch]),
 );
 
+/**
+ * The 4 light /scan accents — a subset of the link accents with ink-on-colour
+ * headers (the scan card header uses dark text, so only the light brand colours
+ * read). `accent` null on a scan card ⇒ the page auto-cycles by position. KEEP in
+ * sync with dsec-website's `accentBg` + the scan schema's SCAN_ACCENTS.
+ */
+export const SCAN_ACCENTS = [
+  { value: "blue", label: "Blue", swatch: "#3b82f6" },
+  { value: "pink", label: "Pink", swatch: "#e91e63" },
+  { value: "yellow", label: "Yellow", swatch: "#f5b700" },
+  { value: "mint", label: "Mint", swatch: "#34d399" },
+] as const;
+
+export const SCAN_ACCENT_VALUES: readonly string[] = SCAN_ACCENTS.map((a) => a.value);
+
+export const SCAN_ACCENT_SWATCH: Record<string, string> = Object.fromEntries(
+  SCAN_ACCENTS.map((a) => [a.value, a.swatch]),
+);
+
 export const PERSON_TYPES = [
   "Exec",
   "Committee Lead",

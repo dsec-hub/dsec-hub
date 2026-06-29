@@ -50,7 +50,9 @@ const NAV: NavSection[] = [
     label: "Resources",
     items: [
       { href: "/docs", label: "Docs", icon: "documents", module: "documents" },
+      { href: "/docs?type=Page", label: "Pages", icon: "eye", module: "documents" },
       { href: "/links", label: "Link Tree", icon: "link", module: "links" },
+      { href: "/scan", label: "Scan Wall", icon: "camera", module: "scan" },
     ],
   },
   {

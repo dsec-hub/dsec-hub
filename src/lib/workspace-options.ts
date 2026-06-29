@@ -40,6 +40,10 @@ export const DOC_TYPES = [
   "Deliverable",
   "Policy",
   "General",
+  // A document published as a public page at dsec.club/<slug>. Selecting this
+  // type reveals the "Publish as page" panel (slug + nav + blocks) on the edit
+  // page.
+  "Page",
 ] as const;
 export const DOC_STATUSES = ["Draft", "InReview", "Final"] as const;
 

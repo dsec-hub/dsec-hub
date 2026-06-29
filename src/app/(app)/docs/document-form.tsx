@@ -28,6 +28,7 @@ export function DocumentForm({
   onSuccess,
   onCancel,
   canWrite = true,
+  pageSection,
 }: {
   action: Action;
   document?: DocumentRow;
@@ -45,6 +46,10 @@ export function DocumentForm({
   onSuccess?: () => void;
   onCancel?: () => void;
   canWrite?: boolean;
+  /** "Publish as page" panel (slug / nav / SEO / cover / blocks), rendered inside
+   * the form so Save persists it. Server-built on the edit page for Page-type
+   * docs; omitted (or a hint) elsewhere. */
+  pageSection?: React.ReactNode;
 }) {
   const [state, formAction] = useActionState(action, undefined);
   useActionToast(state);
@@ -181,6 +186,8 @@ export function DocumentForm({
           />
         </div>
       </fieldset>
+
+      {pageSection}
 
       <div className="flex items-center gap-3">
         {canWrite ? (

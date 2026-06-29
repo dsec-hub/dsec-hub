@@ -19,7 +19,14 @@ import {
 import { cn } from "@/lib/format";
 import { cropToBlob, fileToWebpBlob, isHeic, toDisplayable } from "@/lib/image-crop";
 
-export type EntityType = "event" | "project" | "sponsor" | "speaker" | "person" | "partner";
+export type EntityType =
+  | "event"
+  | "project"
+  | "sponsor"
+  | "speaker"
+  | "person"
+  | "partner"
+  | "document";
 
 export type MediaItem = {
   id: number;
@@ -57,6 +64,14 @@ const ROLES_BY_ENTITY: Record<EntityType, RoleDef[]> = {
   person: [
     { value: "photo", label: "Photo", aspect: 1, hint: "Headshot — square 1:1" },
   ],
+  // Custom-page images are normally added inline in the page editor; this entry
+  // keeps the shared media unions exhaustive and offers the same banner/image/
+  // logo roles if the MediaManager is ever pointed at a page.
+  document: [
+    { value: "banner", label: "Banner", aspect: 16 / 9, hint: "Wide hero — 16:9" },
+    { value: "image", label: "Image", aspect: undefined, hint: "Any image — crop freely" },
+    { value: "logo", label: "Logo", aspect: undefined, hint: "Logo — transparent PNG works best; crop freely" },
+  ],
 };
 
 // Per-entity copy for the section header / empty state / buttons.
@@ -67,6 +82,7 @@ const SECTION_COPY: Record<EntityType, { title: string; add: string; empty: stri
   partner: { title: "Logo", add: "Add logo", empty: "No logo yet. Upload the partner's brand logo — it shows on the events they collaborate on." },
   speaker: { title: "Photo", add: "Add photo", empty: "No photo yet. Upload a headshot — it shows on the public site." },
   person: { title: "Profile photo", add: "Add photo", empty: "No profile photo yet. Upload a headshot — it shows on the public team page (and as the lead avatar on events/projects they run)." },
+  document: { title: "Images", add: "Add image", empty: "No images yet. Upload an image — add it to a block in the page editor." },
 };
 
 function roleVariant(role: string) {

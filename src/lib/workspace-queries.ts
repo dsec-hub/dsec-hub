@@ -23,6 +23,8 @@ import {
   partners,
   people,
   projects,
+  scanPage,
+  scanTargets,
   sponsorContacts,
   sponsors,
   taskBoards,
@@ -757,6 +759,12 @@ export const DEFAULT_LINK_PROFILE = {
   title: "DSEC",
   tagline: "Deakin Cyber Society",
   mascot: "duck-mascot",
+  // No socials until the committee sets them (see saveLinkProfile).
+  instagram: null,
+  discord: null,
+  linkedin: null,
+  github: null,
+  email: null,
 } as const;
 
 /** Every non-archived link, in the order they appear on the public page
@@ -775,6 +783,38 @@ export async function getLinks(): Promise<LinkRow[]> {
 export async function getLinkProfile(): Promise<LinkProfileRow | typeof DEFAULT_LINK_PROFILE> {
   const [row] = await db.select().from(linkProfile).where(eq(linkProfile.id, 1)).limit(1);
   return row ?? DEFAULT_LINK_PROFILE;
+}
+
+export type ScanTargetRow = typeof scanTargets.$inferSelect;
+
+/** Every non-archived /scan QR card, in display order (display_order asc,
+ * created_at asc). Includes hidden cards so the editor can manage them; the
+ * public feed (dsec-api) filters on is_visible. */
+export async function getScanTargets(): Promise<ScanTargetRow[]> {
+  return db
+    .select()
+    .from(scanTargets)
+    .where(eq(scanTargets.archived, false))
+    .orderBy(asc(scanTargets.displayOrder), asc(scanTargets.createdAt));
+}
+
+export type ScanPageRow = typeof scanPage.$inferSelect;
+
+/** Defaults for the singleton /scan header when the row hasn't been saved yet (or
+ * a field is blank). Title/description null ⇒ the editor shows the placeholder
+ * and the public page falls back to the built-in copy. Mirrors dsec-api's
+ * scan service DEFAULT_PAGE_* and dsec-website's DEFAULT_SCAN_PAGE. */
+export const DEFAULT_SCAN_PAGE = {
+  id: 1,
+  title: null,
+  description: null,
+} as const;
+
+/** The singleton /scan header (always row id = 1), or the defaults object when it
+ * hasn't been created yet. */
+export async function getScanPage(): Promise<ScanPageRow | typeof DEFAULT_SCAN_PAGE> {
+  const [row] = await db.select().from(scanPage).where(eq(scanPage.id, 1)).limit(1);
+  return row ?? DEFAULT_SCAN_PAGE;
 }
 
 // ===========================================================================
@@ -839,6 +879,8 @@ export async function getDocuments(scope: CommitteeScope, opts: { type?: string 
     .select({
       id: documents.id, title: documents.title, type: documents.type, status: documents.status,
       committee: documents.committee,
+      // Page-publishing surface for the Docs list (Published/Draft badge + slug).
+      isPublic: documents.isPublic, slug: documents.slug,
       assigneeId: documents.assigneeId, updatedAt: documents.updatedAt, assigneeName: people.name,
     })
     .from(documents)
@@ -1127,7 +1169,14 @@ export async function getDocumentById(id: number, scope: CommitteeScope) {
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>[number];
 
 /** The entity kinds that can own uploaded media (mirrors dsec-api ENTITY_TYPES). */
-export type MediaEntityType = "event" | "project" | "sponsor" | "speaker" | "person" | "partner";
+export type MediaEntityType =
+  | "event"
+  | "project"
+  | "sponsor"
+  | "speaker"
+  | "person"
+  | "partner"
+  | "document";
 
 /** Images attached to an entity, ordered for the dashboard gallery. */
 export async function getMedia(entityType: MediaEntityType, entityId: number) {

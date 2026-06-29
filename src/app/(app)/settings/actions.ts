@@ -5,6 +5,7 @@ import { and, eq, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 import type { MediaState } from "@/app/(app)/media/actions";
+import type { EntityType } from "@/components/media-manager";
 import { db } from "@/db";
 import { appUser, people } from "@/db/schema";
 import { apiEnv } from "@/lib/api-env";
@@ -87,7 +88,7 @@ export async function uploadOwnPhoto(_prev: MediaState, fd: FormData): Promise<M
  */
 export async function deleteOwnPhoto(
   id: number,
-  _entityType: "event" | "project" | "sponsor" | "speaker" | "person" | "partner",
+  _entityType: EntityType,
   _entityId: number,
 ): Promise<MediaState> {
   const user = await requireUser();

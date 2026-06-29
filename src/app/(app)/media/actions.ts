@@ -10,7 +10,7 @@ import { getMedia } from "@/lib/workspace-queries";
 
 export type MediaState = { error?: string; ok?: string } | undefined;
 
-type EntityType = "event" | "project" | "sponsor" | "speaker" | "person" | "partner";
+type EntityType = "event" | "project" | "sponsor" | "speaker" | "person" | "partner" | "document";
 
 // Maps an upload target to the dashboard module (for write-permission checks),
 // the route base to revalidate, and the public-website feed tag to invalidate.
@@ -26,6 +26,9 @@ const SECTION = {
   partner: { module: "partners", base: "/partners", tag: "partners" },
   speaker: { module: "events", base: "/events", tag: "events" },
   person: { module: "people", base: "/people", tag: "team" },
+  // Custom-page images. Managed on the doc edit page; the "pages" feed tag is
+  // flushed so a published page picks up the new image.
+  document: { module: "documents", base: "/docs", tag: "pages" },
 } as const;
 
 /**

@@ -11,6 +11,7 @@ import { getDocuments } from "@/lib/workspace-queries";
 
 const DOC_TYPES = [
   "All",
+  "Page",
   "Note",
   "MeetingNotes",
   "SponsorDoc",
@@ -23,6 +24,7 @@ type DocType = (typeof DOC_TYPES)[number];
 
 const TYPE_LABELS: Record<DocType, string> = {
   All: "All",
+  Page: "Pages",
   Note: "Notes",
   MeetingNotes: "Meeting Notes",
   SponsorDoc: "Sponsor Docs",
@@ -109,11 +111,21 @@ export default async function DocsPage({
                       {d.type === "Deliverable" && d.assigneeName
                         ? `for ${d.assigneeName} · `
                         : ""}
+                      {d.type === "Page" && d.slug ? (
+                        <span className="text-muted/80">/{d.slug} · </span>
+                      ) : (
+                        ""
+                      )}
                       {formatDate(d.updatedAt)}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {d.committee && <Badge variant="accent">{d.committee}</Badge>}
+                    {d.type === "Page" && (
+                      <Badge variant={d.isPublic ? "success" : "warning"}>
+                        {d.isPublic ? "Published" : "Draft"}
+                      </Badge>
+                    )}
                     <Badge variant="neutral">{d.type ?? "—"}</Badge>
                     <Badge variant={statusVariant(d.status)}>{d.status ?? "—"}</Badge>
                   </div>

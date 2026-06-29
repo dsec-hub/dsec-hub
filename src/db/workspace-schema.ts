@@ -249,6 +249,19 @@ export const documents = pgTable("document", {
   content: text(),
   contentJson: json("content_json"),
   status: varchar({ length: 32 }),
+  // --- custom pages (dsec-api page columns) -------------------------------
+  // A document can be published as a public page at dsec.club/<slug>. These
+  // mirror the snake_case columns dsec-api added; the body lives in contentJson
+  // ({ version, blocks }). is_public is the draft/published flag (off until an
+  // exec publishes — same convention as events/projects).
+  isPublic: boolean("is_public").default(false).notNull(),
+  slug: varchar("slug", { length: 256 }),
+  navLabel: varchar("nav_label", { length: 128 }),
+  showInNav: boolean("show_in_nav").default(false).notNull(),
+  navArea: varchar("nav_area", { length: 16 }), // "header" | "footer"
+  navOrder: integer("nav_order").default(0).notNull(),
+  seoDescription: text("seo_description"),
+  coverImageUrl: varchar("cover_image_url", { length: 1024 }),
   parentId: integer("parent_id"),
   assigneeId: integer("assignee_id"),
   relatedEventId: integer("related_event_id"),
@@ -414,6 +427,52 @@ export const linkProfile = pgTable("link_profile", {
   tagline: varchar({ length: 160 }),
   // A PixelDuck sprite name (file dsec-website/public/pixel/<mascot>.webp).
   mascot: varchar({ length: 64 }),
+  // The club's canonical socials — edited ONCE here and served to every public
+  // surface (the /links page, the website + portal footers, contact/scan/join)
+  // via the dsec-api feed. Nullable: an unset social renders nowhere. The four
+  // URL fields hold absolute http(s) profile URLs; `email` is a bare address.
+  // Owned by dsec-api / Alembic (migration c7e1a9f3b5d2) — keep in sync.
+  instagram: varchar({ length: 512 }),
+  discord: varchar({ length: 512 }),
+  linkedin: varchar({ length: 512 }),
+  github: varchar({ length: 512 }),
+  email: varchar({ length: 254 }),
+  updatedAt: ts("updated_at").defaultNow().notNull(),
+});
+
+// QR cards on the public, big-screen /scan page (built to put up at events).
+// Like a link row but QR-shaped (label/caption/url/pretty/accent). Owned by
+// dsec-api / Alembic (migration d4f8b2c6a1e9) — defined ONLY here to avoid the
+// schema.ts double-definition trap. NO default set: /scan renders exactly the
+// visible rows here (plus the club's IG/Discord, auto-pulled from socials).
+export const scanTargets = pgTable("scan_target", {
+  id: serial().primaryKey(),
+  // Card heading, e.g. "Website".
+  label: varchar({ length: 120 }).notNull(),
+  // Optional descriptive line under the heading.
+  caption: varchar({ length: 200 }),
+  // The destination the QR encodes (absolute http(s)://… / mailto: / tel:).
+  url: varchar({ length: 2048 }).notNull(),
+  // Short display of the destination shown under the QR, e.g. "@dsec".
+  pretty: varchar({ length: 120 }),
+  // One of the 4 light scan accents (blue/pink/yellow/mint); null ⇒ auto-cycle.
+  accent: varchar({ length: 16 }),
+  displayOrder: integer("display_order").default(0).notNull(),
+  isVisible: boolean("is_visible").default(true).notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+  updatedAt: ts("updated_at").defaultNow().notNull(),
+  archived: boolean().default(false).notNull(),
+});
+
+// Singleton header for the public /scan QR wall (always row id = 1): the big
+// title + one-line description shown above the cards. Both nullable — a NULL
+// field means "use the built-in default copy", so clearing it in the dashboard
+// restores the default rather than blanking the page heading. Owned by dsec-api /
+// Alembic (migration a2e6c4f8b1d3) — keep in sync.
+export const scanPage = pgTable("scan_page", {
+  id: serial().primaryKey(),
+  title: varchar({ length: 120 }),
+  description: varchar({ length: 300 }),
   updatedAt: ts("updated_at").defaultNow().notNull(),
 });
 
@@ -508,7 +567,7 @@ export const financeTransactions = pgTable("finance_transaction", {
 
 export const mediaAssets = pgTable("media_asset", {
   id: serial().primaryKey(),
-  entityType: varchar("entity_type", { length: 16 }).notNull(), // event|project|sponsor|speaker
+  entityType: varchar("entity_type", { length: 16 }).notNull(), // event|project|sponsor|speaker|person|partner|document
   entityId: integer("entity_id").notNull(),
   role: varchar({ length: 16 }).notNull(), // image|poster|banner|logo|photo
   altText: varchar("alt_text", { length: 512 }),
