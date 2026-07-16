@@ -1,4 +1,4 @@
-# DSEC — exec dashboard (`dsec-app`)
+# DSEC — exec dashboard (`dsec-hub`)
 
 The internal, login-gated dashboard the DSEC committee uses to run the club:
 full CRUD over events, people, projects, sponsors, finance, members, tasks,
@@ -72,7 +72,7 @@ is gitignored).
 | `DSEC_API_URL` | ⚠️ AI/media | `dsec-api` base URL — enables AI meeting notes + image upload. |
 | `DSEC_API_KEY` | ⚠️ AI/media | API key with **both** `trigger` (AI notes) and `write` (media) scopes. Blank disables those features. |
 | `RESEND_API_KEY` / `EMAIL_FROM` | optional | Member-invite emails via Resend (logs the link if unset). |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | prod | Per-IP throttle + login brute-force guard. Blank → rate limiting fails open. See [`../SECURITY.md`](../SECURITY.md). |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | prod | Per-IP throttle + login brute-force guard. Blank → rate limiting fails open. See [`SECURITY.md`](./SECURITY.md). |
 
 ## Project layout
 
@@ -93,10 +93,10 @@ scripts/          # idempotent DB setup + user/role seeding (run with tsx)
 
 ## Deployment
 
-Deploys to **Vercel** as its own project (**Root Directory `dsec-app`**). Set
+Deploys to **Vercel** as its own project (repository root). Set
 `DATABASE_URL` (pooled) + `AUTH_SECRET` + `AUTH_TRUST_HOST=true` at minimum. See
-[`../DEPLOY.md`](../DEPLOY.md) (quick path) and [`../HOSTING.md`](../HOSTING.md)
-(full runbook), and [`../SECURITY.md`](../SECURITY.md) for rate limiting.
+[`CROSS_REPOSITORY.md`](./CROSS_REPOSITORY.md) for the dependency and deployment
+order, and [`SECURITY.md`](./SECURITY.md) for rate limiting.
 
 ## License
 
