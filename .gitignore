@@ -32,8 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-# ...but keep the committed template (matches root .gitignore intent)
+# ...but keep the committed template
 !.env.example
+
+# MCP config — can hold provider API keys, keep out of git
+.mcp.json
 
 # vercel
 .vercel

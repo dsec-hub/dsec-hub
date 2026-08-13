@@ -7,7 +7,17 @@ import * as schema from "./schema";
 const globalForDb = globalThis as unknown as { __pool?: Pool };
 
 function createPool(): Pool {
-  const url = new URL(process.env.DATABASE_URL ?? "");
+  // This module is evaluated during `next build` (page-data collection), so a
+  // missing DATABASE_URL fails the build, not just the first request. Name the
+  // variable — `new URL("")` on its own only reports "Invalid URL".
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL is not set. Copy .env.example to .env.local and fill it in " +
+        "for local work, or set it in the Vercel project for a deploy.",
+    );
+  }
+  const url = new URL(connectionString);
   // Handle TLS via the `ssl` option rather than the connection string so
   // node-postgres doesn't emit its sslmode-compatibility warning. Neon serves a
   // publicly-trusted certificate, so we keep verification on.

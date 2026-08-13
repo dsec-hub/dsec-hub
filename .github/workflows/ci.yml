@@ -1,0 +1,51 @@
+# Typecheck, lint and build on every push to main and every PR.
+#
+# This repo was split out of a monorepo and had no CI, so nothing caught a broken
+# build before it reached production. This is the cheap floor: it will not catch
+# logic bugs, but "main does not compile" can no longer merge unnoticed.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch makes an in-flight run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: typecheck / lint / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Vercel's current default major. package.json "engines" sets the floor
+          # (>=20.9.0); this pins what CI actually runs on.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run build
+        env:
+          # src/db/index.ts opens a pg Pool at module scope, so `next build`
+          # parses DATABASE_URL while collecting page data. Nothing connects
+          # during a build, so a syntactically valid placeholder is enough — but
+          # the variable must be present or the build fails. No real secret
+          # belongs in CI; a build that needed one would itself be the bug.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci

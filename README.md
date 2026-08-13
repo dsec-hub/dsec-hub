@@ -22,9 +22,21 @@ Resend-inspired canvas — see [`DESIGN.md`](./DESIGN.md).
 ```bash
 npm install
 cp .env.example .env.local   # then fill DATABASE_URL + AUTH_SECRET (see below)
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3002
 npm run build                # production build
+npm run typecheck            # tsc --noEmit
+npm run lint                 # eslint
 ```
+
+The dev server is pinned to **3002** so the four front-ends (website 3000,
+portal 3001, hub 3002, games 3003) can all run at once.
+
+> `next build` evaluates `src/db/index.ts` while collecting page data, so
+> `DATABASE_URL` must be present at **build** time even though nothing connects.
+> CI passes a placeholder for this reason.
+
+CI runs typecheck, lint and build on every push to `main` and every PR
+(`.github/workflows/ci.yml`).
 
 Sign in at `/signin` with an exec login you create with the scripts below.
 
@@ -67,8 +79,9 @@ is gitignored).
 | Var | Needed | Purpose |
 |---|---|---|
 | `DATABASE_URL` | ✅ | Neon Postgres — the **same** DB `dsec-api` owns; use the **pooled** (`-pooler`) string in prod. |
-| `AUTH_SECRET` | ✅ | NextAuth session signing key (`openssl rand -base64 32`). |
-| `APP_URL` | ✅ | Public base URL (used in invite links); `http://localhost:3000` locally. |
+| `AUTH_SECRET` | ✅ | NextAuth session signing key (`openssl rand -base64 32`). Also signs the role-preview and undo tokens, which otherwise fall back to committed dev literals. Use `AUTH_SECRET`, not `NEXTAUTH_SECRET` — only the latter two modules read that name. |
+| `AUTH_TRUST_HOST` | ✅ prod | `true` on Vercel and behind any proxy, so NextAuth trusts the forwarded host. |
+| `APP_URL` | ✅ | Public base URL; `http://localhost:3002` locally, `https://hub.dsec.club` in prod. Used for invite links **and every link inside notification emails, Discord and Telegram messages** — if it is unset those links silently point at localhost. |
 | `DSEC_API_URL` | ⚠️ AI/media | `dsec-api` base URL — enables AI meeting notes + image upload. |
 | `DSEC_API_KEY` | ⚠️ AI/media | API key with **both** `trigger` (AI notes) and `write` (media) scopes. Blank disables those features. |
 | `RESEND_API_KEY` / `EMAIL_FROM` | optional | Member-invite emails via Resend (logs the link if unset). |
