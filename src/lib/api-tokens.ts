@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { apiKey } from "@/db/schema";
-import { apiEnv } from "@/lib/api-env";
+import { apiBaseUrl, apiEnv } from "@/lib/api-env";
 import type { CurrentUser } from "@/lib/dal";
 import { canWrite, isAdmin } from "@/lib/rbac";
 
@@ -152,8 +152,10 @@ export async function revokeTokenForUser(userId: number, keyId: number): Promise
 
 /** The MCP server URL a client connects to (derived from the API base). */
 export function mcpServerUrl(): string {
-  const env = apiEnv();
-  return env ? `${env.base}/mcp` : "https://api.dsec.club/mcp";
+  // apiBaseUrl(), not apiEnv(): rendering the URL needs no API key, and gating it
+  // on one meant a keyless deploy silently displayed the hardcoded production
+  // host — wrong in local dev, and wrong once the API changes address.
+  return `${apiBaseUrl()}/mcp`;
 }
 
 /**

@@ -14,3 +14,16 @@ export function apiEnv(): { base: string; key: string } | null {
   if (!base || !key) return null;
   return { base: base.replace(/\/+$/, ""), key };
 }
+
+/**
+ * The dsec-api base URL on its own, for callers that only need to *name* the API
+ * rather than call it (e.g. rendering the MCP connect URL for a user to copy).
+ *
+ * Separate from `apiEnv()`, which returns null unless a KEY is also present —
+ * that forced display-only callers onto a hardcoded production fallback, so a
+ * deploy with DSEC_API_URL set but no key showed the wrong host. Still falls back
+ * to production when nothing is configured, since a URL must be rendered.
+ */
+export function apiBaseUrl(): string {
+  return (process.env.DSEC_API_URL || "https://api.dsec.club").replace(/\/+$/, "");
+}
