@@ -43,10 +43,14 @@ export type UndoToken =
   | { op: "settings"; prev: Record<string, string | null>; paths: string[] };
 
 /**
- * A signed, opaque undo token as it crosses to the client. The browser treats it
- * as a string and hands it straight back to `performUndo`, which verifies the
- * signature before parsing it back into an `UndoToken` (see undo-sign.ts). The
- * client never sees or can tamper with the snapshot inside.
+ * A signed undo token as it crosses to the client. The browser treats it as a
+ * string and hands it straight back to `performUndo`, which verifies the
+ * signature before parsing it back into an `UndoToken` (see undo-sign.ts).
+ *
+ * The signature makes the snapshot tamper-EVIDENT, not secret: the payload is
+ * base64url JSON, so the client CAN read (just not forge) the snapshot inside.
+ * Secret columns must therefore never enter a snapshot in the first place — see
+ * COLUMN_DENYLIST in undo.ts, which strips them at capture time (SEC-15).
  */
 export type SignedUndoToken = string;
 
