@@ -563,11 +563,16 @@ export const sponsorLeads = pgTable("sponsor_lead", {
 // here. The hub reads it only to show a "matched member" hint in Member Support.
 // Declared with just the columns the hub reads. ---
 
+// This physical table is declared twice (see ARCH-03). Every column here must
+// be given an explicit SQL name — Drizzle's casing cache is keyed on the table
+// name and only the FIRST declaration queried in a process fills it, so an
+// inferred name from the second declaration resolves to `undefined` and Drizzle
+// emits `members.undefined` (NEW-SCHEMA-02).
 export const members = pgTable("members", {
-	id: serial().primaryKey().notNull(),
+	id: serial("id").primaryKey().notNull(),
 	studentId: varchar("student_id", { length: 32 }).notNull(),
 	fullName: varchar("full_name", { length: 256 }),
-	email: varchar({ length: 256 }),
+	email: varchar("email", { length: 256 }),
 	dusaMember: boolean("dusa_member").default(false).notNull(),
 	endDate: date("end_date", { mode: 'string' }),
 	isCurrent: boolean("is_current").default(true).notNull(),

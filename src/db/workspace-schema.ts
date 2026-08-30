@@ -502,13 +502,18 @@ export const attachments = pgTable("attachment", {
 
 // --- DUSA imports ----------------------------------------------------------
 
+// This physical table is declared twice (see ARCH-03). Every column here must
+// be given an explicit SQL name — Drizzle's casing cache is keyed on the table
+// name and only the FIRST declaration queried in a process fills it, so an
+// inferred name from the second declaration resolves to `undefined` and Drizzle
+// emits `members.undefined` (NEW-SCHEMA-02).
 export const members = pgTable("members", {
-  id: serial().primaryKey(),
+  id: serial("id").primaryKey(),
   studentId: varchar("student_id", { length: 32 }).notNull(),
   fullName: varchar("full_name", { length: 256 }),
-  email: varchar({ length: 256 }),
-  campus: varchar({ length: 128 }),
-  faculty: varchar({ length: 256 }),
+  email: varchar("email", { length: 256 }),
+  campus: varchar("campus", { length: 128 }),
+  faculty: varchar("faculty", { length: 256 }),
   paymentOption: varchar("payment_option", { length: 256 }),
   membershipType: varchar("membership_type", { length: 32 }),
   dusaMember: boolean("dusa_member").default(false).notNull(),
