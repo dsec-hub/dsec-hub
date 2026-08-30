@@ -125,6 +125,23 @@ export function RoleForm({
         </p>
       </div>
 
+      {/* Committee visibility — a real permission boundary (five write guards +
+          the archive query consult it). A <select>, not radios: a radio group
+          with nothing checked submits no field, which would silently mean "own".
+          Stored on view_config; editable even on system roles. */}
+      <Field
+        label="Committee visibility"
+        hint="Controls whether this role can read and edit OTHER committees' meetings and meeting notes."
+      >
+        <SelectField
+          name="viewConfig:committeeScope"
+          defaultValue={role?.viewConfig?.committeeScope ?? "own"}
+        >
+          <option value="own">This committee only (plus club-wide records)</option>
+          <option value="all">All committees</option>
+        </SelectField>
+      </Field>
+
       {/* --- Focus & dashboard (the presentation/Focus layer) ----------------- */}
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <div>

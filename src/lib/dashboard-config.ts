@@ -317,7 +317,10 @@ export function normalizeViewConfig(raw: ViewConfig | null | undefined, roleName
     landingPath: raw.landingPath ?? fallback.landingPath,
     defaultTaskView: raw.defaultTaskView ?? fallback.defaultTaskView,
     navOrder: raw.navOrder ?? fallback.navOrder,
-    committeeScope: raw.committeeScope ?? fallback.committeeScope,
+    // Fail closed. A role that somehow has no stored committeeScope gets the
+    // narrow scope — it must never be widened by what the role is CALLED.
+    // (getDefaultViewConfig still seeds brand-new roles from the name.)
+    committeeScope: raw.committeeScope ?? "own",
   };
 }
 
