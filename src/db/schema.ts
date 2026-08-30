@@ -463,7 +463,7 @@ export const appInvite = pgTable("app_invite", {
 	acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	uniqueIndex("ix_app_invite_token_hash").using("btree", table.tokenHash.asc().nullsLast().op("text_ops")),
-	index("ix_app_invite_email").using("btree", table.email.asc().nullsLast().op("text_ops")),
+	index("ix_app_invite_email").using("btree", sql`lower(${table.email})`),
 	index("ix_app_invite_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.roleId],
@@ -582,7 +582,10 @@ export const members = pgTable("members", {
 // `scripts/add-portal-account-table.ts`, NOT Alembic). One row per portal login
 // (OAuth identity + DUSA-membership lifecycle). The hub's Member Support view
 // reads these and writes `manual_override` to approve/reject access. ---
-
+//
+// UNIQUE on lower(email): one portal account per student regardless of how they
+// capitalise their address. Created by dsec-app/scripts/add-portal-account-table.ts,
+// NOT by Alembic. Any insert path must compare case-insensitively.
 export const portalAccount = pgTable("portal_account", {
 	id: serial().primaryKey().notNull(),
 	email: varchar({ length: 256 }).notNull(),
@@ -605,7 +608,7 @@ export const portalAccount = pgTable("portal_account", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
-	uniqueIndex("ix_portal_account_email").using("btree", table.email.asc().nullsLast()),
+	uniqueIndex("ix_portal_account_email").using("btree", sql`lower(${table.email})`),
 	index("ix_portal_account_status").using("btree", table.status.asc().nullsLast()),
 	index("ix_portal_account_member_id").using("btree", table.memberId.asc().nullsLast()),
 ]);
