@@ -15,7 +15,8 @@ import { coOwnerIdsOf, getTaskOwnerIds, setTaskOwners } from "@/lib/owners";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 import { logMutation } from "@/lib/usage";
-import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
+import { isKnownCommittee } from "@/lib/committee-queries";
+import { DEFAULT_BOARD_COLUMNS, validPriority } from "@/lib/workspace-options";
 import type { TaskParentKind } from "@/lib/workspace-queries";
 
 export type FormState = ActionResult;
@@ -473,13 +474,26 @@ export async function reassignTask(taskId: number, dim: string, value: string): 
       set.status = value;
       set.completedAt = value === "Done" ? now : null;
       break;
-    case "priority":
-      set.priority = value && value !== "__none__" ? value : null;
+    case "priority": {
+      const p = validPriority(value);
+      if (p === undefined) return; // unknown priority — ignore rather than crash
+      set.priority = p;
       break;
-    case "committee":
+    }
+    case "committee": {
       if (!fullWrite) return;
-      set.committee = value && value !== "__none__" ? value : null;
+      if (!value || value === "__none__") {
+        set.committee = null;
+        break;
+      }
+      // Validate against the committee table (COL-HUB-04); the club adds and
+      // renames committees, so a hardcoded list would drift. isKnownCommittee
+      // fails OPEN, so an unknown-but-nonempty name is only rejected below when
+      // it is genuinely absent.
+      if (!(await isKnownCommittee(value))) return; // unknown committee — ignore rather than crash
+      set.committee = value;
       break;
+    }
     case "board":
       if (!fullWrite) return;
       set.boardId = value === "inbox" || value === "" ? null : Number(value) || null;

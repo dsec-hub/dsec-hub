@@ -7,6 +7,22 @@ import type { Attendee } from "@/db/workspace-schema";
 
 export const TASK_PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
 
+/**
+ * `dim`/`value` in reassignTask come straight from the drag-and-drop client.
+ * `priority` is varchar(16) and `committee` is varchar(128), so an unvalidated
+ * value long enough to overflow either column raises Postgres 22001 out of a
+ * `Promise<void>` Server Action that catches nothing — and dsec-hub has no
+ * error.tsx, so the user lands on Next's bare crash page and loses the board.
+ * "__none__" is the client's sentinel for "clear this field".
+ *
+ * `null` means "clear it", a string means "set it", and `undefined` means
+ * "reject this request".
+ */
+export function validPriority(value: string): string | null | undefined {
+  if (!value || value === "__none__") return null;
+  return (TASK_PRIORITIES as readonly string[]).includes(value) ? value : undefined;
+}
+
 /** Display name for an attendee, tolerating legacy plain-string rows. */
 export function attendeeName(a: Attendee | string): string {
   return typeof a === "string" ? a : a.name;
