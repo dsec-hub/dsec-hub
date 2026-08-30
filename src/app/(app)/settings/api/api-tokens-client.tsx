@@ -11,7 +11,7 @@ import { cn } from "@/lib/format";
 import type { ApiScope } from "@/lib/api-tokens";
 import { useActionToast } from "@/lib/use-action-toast";
 
-import { createApiToken } from "./actions";
+import { createApiToken, revokeApiToken } from "./actions";
 
 type ScopeOption = { key: ApiScope; label: string; description: string };
 
@@ -296,5 +296,23 @@ export function McpConnection({ url, allowedScopes }: { url: string; allowedScop
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Revoke button for one token. Uses `useActionState` so a failed revoke (API
+ * unreachable / misconfigured) surfaces a toast instead of silently no-opping —
+ * a revoke that quietly fails would leave a live credential the user thinks is
+ * gone. On success the page revalidates and the row disappears.
+ */
+export function RevokeTokenButton({ keyId }: { keyId: number }) {
+  const [state, formAction] = useActionState(revokeApiToken.bind(null, keyId), undefined);
+  useActionToast(state);
+  return (
+    <form action={formAction}>
+      <SubmitButton className={cn(buttonGhost, "text-danger hover:text-danger")}>
+        Revoke
+      </SubmitButton>
+    </form>
   );
 }

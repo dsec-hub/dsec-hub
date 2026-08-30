@@ -10,8 +10,7 @@ import {
 import { requireUser } from "@/lib/dal";
 import { cn, formatDate } from "@/lib/format";
 
-import { revokeApiToken } from "./actions";
-import { CreateTokenForm, McpConnection, QuickStart } from "./api-tokens-client";
+import { CreateTokenForm, McpConnection, QuickStart, RevokeTokenButton } from "./api-tokens-client";
 
 export default async function ApiSettingsPage() {
   const user = await requireUser();
@@ -104,14 +103,7 @@ export default async function ApiSettingsPage() {
                         <Icons.documents className="h-4 w-4" />
                         Guide
                       </a>
-                      <form action={revokeApiToken.bind(null, t.id)}>
-                        <button
-                          type="submit"
-                          className={cn(buttonGhost, "text-danger hover:text-danger")}
-                        >
-                          Revoke
-                        </button>
-                      </form>
+                      <RevokeTokenButton keyId={t.id} />
                     </div>
                   )}
                 </li>
