@@ -141,6 +141,19 @@ export const projects = pgTable("project", {
   isPublic: boolean("is_public").default(false).notNull(),
   relatedEventId: integer("related_event_id"),
   notes: text(),
+  // SHOW-5 review workflow (columns owned by dsec-api/Alembic; mirror only).
+  // A project may only be public when reviewState is 'approved' — the DB enforces
+  // it with a CHECK, so setProjectPublished must approve in the same write.
+  source: varchar({ length: 32 }).default("committee").notNull(),
+  reviewState: varchar("review_state", { length: 16 }).default("draft").notNull(),
+  submittedByAccountId: integer("submitted_by_account_id"),
+  submittedByEmail: varchar("submitted_by_email", { length: 320 }),
+  submittedAt: ts("submitted_at"),
+  reviewNote: text("review_note"),
+  internalNote: text("internal_note"),
+  reviewedBy: varchar("reviewed_by", { length: 320 }),
+  reviewedByAccountId: integer("reviewed_by_account_id"),
+  reviewedAt: ts("reviewed_at"),
   createdAt: ts("created_at").defaultNow().notNull(),
   updatedAt: ts("updated_at").defaultNow().notNull(),
   archived: boolean().default(false).notNull(),

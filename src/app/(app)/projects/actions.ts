@@ -113,9 +113,25 @@ export async function setProjectPublished(id: number, published: boolean): Promi
     if (!p.name) return { error: "Add a name before publishing." };
   }
   const undo = await snapshotForUpdate("project", id);
+  const now = new Date().toISOString();
+  // The DB enforces `is_public = false OR review_state = 'approved'`. A committee
+  // publish IS the human approval, so stamp the review fields in the SAME write —
+  // otherwise this update violates the CHECK and 500s. Unpublishing only clears
+  // is_public (which satisfies the CHECK on its own), leaving the approval intact.
   await db
     .update(projects)
-    .set({ isPublic: published, updatedAt: new Date().toISOString() })
+    .set({
+      isPublic: published,
+      updatedAt: now,
+      ...(published
+        ? {
+            reviewState: "approved",
+            reviewedBy: user.email,
+            reviewedByAccountId: user.id,
+            reviewedAt: now,
+          }
+        : {}),
+    })
     .where(eq(projects.id, id));
   await logMutation(user, "update", "project", id);
   await revalidateProjects();
