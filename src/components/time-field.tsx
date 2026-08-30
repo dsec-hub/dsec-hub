@@ -26,6 +26,7 @@ function buildSlots(stepMin: number): string[] {
 }
 
 export function TimeField({
+  id,
   name,
   value,
   onChange,
@@ -34,6 +35,8 @@ export function TimeField({
   className,
   placeholder = "—",
 }: {
+  /** Injected by Field so its <label> can point at the trigger button. */
+  id?: string;
   name: string;
   /** Controlled "HH:MM" value (accepts "HH:MM:SS" too — seconds are ignored). */
   value: string;
@@ -91,6 +94,7 @@ export function TimeField({
     <div ref={rootRef} className="relative">
       <input type="hidden" name={name} value={current} />
       <button
+        id={id}
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}

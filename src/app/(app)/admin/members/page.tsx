@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { count, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import {
   Badge,
@@ -13,7 +13,7 @@ import {
 import { db } from "@/db";
 import { assistanceRequest, members, portalAccount } from "@/db/schema";
 import { requireAdmin } from "@/lib/dal";
-import { cn, formatDate } from "@/lib/format";
+import { cn, daysAgoISO, daysUntil, formatDate } from "@/lib/format";
 import type { BadgeVariant } from "@/lib/options";
 
 import {
@@ -24,8 +24,13 @@ import {
   rejectAccount,
   resolveRequest,
 } from "./actions";
+import { LinkRosterMember } from "./link-roster-member";
 
 const ACCOUNT_LIMIT = 500;
+
+// How old a status snapshot can be before we call it stale. A judgement call,
+// not a fact — named so the committee can change it without hunting.
+const STALE_AFTER_DAYS = 30;
 
 function statusVariant(status: string): BadgeVariant {
   if (status === "verified") return "success";
@@ -34,10 +39,27 @@ function statusVariant(status: string): BadgeVariant {
   return "danger"; // locked | rejected
 }
 
+/**
+ * How old a portal_account.status snapshot is.
+ *
+ * `status` is written only when the member themselves loads a portal page
+ * (dsec-app/src/lib/portal-dal.ts step 5) — nothing else recomputes it. So a
+ * status is only as trustworthy as its last_check_at.
+ */
+function staleness(lastCheckAt: string | null): string {
+  if (!lastCheckAt) return "never checked";
+  const days = daysUntil(lastCheckAt);
+  if (days === null) return "never checked";
+  const ago = -days;
+  if (ago <= 0) return "checked today";
+  if (ago === 1) return "checked yesterday";
+  return `checked ${ago} days ago`;
+}
+
 export default async function MemberSupportPage() {
   await requireAdmin();
 
-  const [requests, accounts, statusCounts, openReqRows] = await Promise.all([
+  const [requests, accounts, statusCounts, openReqRows, staleRows] = await Promise.all([
     db
       .select({
         id: assistanceRequest.id,
@@ -61,12 +83,14 @@ export default async function MemberSupportPage() {
         email: portalAccount.email,
         name: portalAccount.name,
         status: portalAccount.status,
+        lastCheckAt: portalAccount.lastCheckAt,
         provider: portalAccount.provider,
         trialExpiresAt: portalAccount.trialExpiresAt,
         verifiedAt: portalAccount.verifiedAt,
         manualOverride: portalAccount.manualOverride,
         overrideBy: portalAccount.overrideBy,
         createdAt: portalAccount.createdAt,
+        memberId: portalAccount.memberId,
         memberName: members.fullName,
         memberEndDate: members.endDate,
       })
@@ -78,6 +102,18 @@ export default async function MemberSupportPage() {
     // never silently undercount once the lists are truncated.
     db.select({ status: portalAccount.status, n: count() }).from(portalAccount).groupBy(portalAccount.status),
     db.select({ n: count() }).from(assistanceRequest).where(eq(assistanceRequest.status, "open")),
+    // How many of the counts above are based on a snapshot older than
+    // STALE_AFTER_DAYS. status is a per-member heartbeat, not a computed view —
+    // see staleness().
+    db
+      .select({ n: count() })
+      .from(portalAccount)
+      .where(
+        or(
+          isNull(portalAccount.lastCheckAt),
+          lt(portalAccount.lastCheckAt, daysAgoISO(STALE_AFTER_DAYS)),
+        ),
+      ),
   ]);
 
   const byStatus: Record<string, number> = Object.fromEntries(
@@ -88,6 +124,7 @@ export default async function MemberSupportPage() {
   const lapsedN = byStatus.lapsed ?? 0; // grace window — these members STILL have access
   const lockedN = (byStatus.locked ?? 0) + (byStatus.rejected ?? 0);
   const openReqN = openReqRows[0]?.n ?? 0;
+  const staleN = staleRows[0]?.n ?? 0;
 
   return (
     <>
@@ -96,13 +133,19 @@ export default async function MemberSupportPage() {
         description="Portal members who couldn't be auto-verified against the DUSA roster, and their help requests. Approving sets a manual override that grants access."
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Open requests" value={openReqN} />
         <StatCard label="Verified" value={verifiedN} />
         <StatCard label="On trial" value={trialN} />
         <StatCard label="Lapsed (grace)" value={lapsedN} hint="still has access" />
         <StatCard label="Locked / rejected" value={lockedN} />
+        <StatCard label="Stale snapshots" value={staleN} hint={`not checked in ${STALE_AFTER_DAYS}+ days`} />
       </div>
+      <p className="mb-6 mt-3 text-xs text-muted">
+        These counts reflect each member&apos;s <em>last portal visit</em>, not the live DUSA
+        roster — a member who stopped using the portal keeps the status they had then. See the
+        per-account &ldquo;checked N days ago&rdquo; below.
+      </p>
 
       {/* Assistance requests ----------------------------------------------- */}
       <SectionCard title={`Open assistance requests · ${openReqN}`} className="mb-6">
@@ -157,8 +200,16 @@ export default async function MemberSupportPage() {
           <EmptyState>No one has signed in to the member portal yet.</EmptyState>
         ) : (
           <ul className="divide-y divide-border">
-            {accounts.map((a) => (
-              <li key={a.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+            {accounts.map((a) => {
+              // A manually-approved (or otherwise verified) account with no roster
+              // link has no membership card — dsec-api keys the code/QR to
+              // member_id, which only the automatic match ever set. Flag it so the
+              // committee links it rather than leaving a silent dead end
+              // (NEW-APPDEEP-01).
+              const needsRosterLink =
+                a.memberId == null && (a.manualOverride === "approved" || a.status === "verified");
+              return (
+              <li key={a.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 truncate text-sm font-medium">
                     {a.name ? `${a.name} · ${a.email}` : a.email}
@@ -168,6 +219,7 @@ export default async function MemberSupportPage() {
                         override: {a.manualOverride}
                       </Badge>
                     )}
+                    {needsRosterLink && <Badge variant="warning">needs roster link</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted">
                     {a.provider ? `${a.provider} · ` : ""}
@@ -175,9 +227,11 @@ export default async function MemberSupportPage() {
                     {a.status === "trial" ? `trial ends ${formatDate(a.trialExpiresAt)} · ` : ""}
                     joined {formatDate(a.createdAt)}
                     {a.overrideBy ? ` · by ${a.overrideBy}` : ""}
+                    {` · ${staleness(a.lastCheckAt)}`}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+                  {needsRosterLink && <LinkRosterMember accountId={a.id} />}
                   {a.manualOverride ? (
                     <form action={clearOverride.bind(null, a.id)}>
                       <button className={buttonGhost}>Clear override</button>
@@ -194,7 +248,8 @@ export default async function MemberSupportPage() {
                   )}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </SectionCard>

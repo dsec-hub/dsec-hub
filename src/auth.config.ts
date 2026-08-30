@@ -1,7 +1,5 @@
 import type { NextAuthConfig } from "next-auth";
 
-import { canAccess, moduleForPath } from "./lib/rbac";
-
 /**
  * Edge/proxy-safe base config: NO database or bcrypt imports, so it can be
  * loaded by `proxy.ts` (which runs on every request) without bundling `pg`.
@@ -29,17 +27,19 @@ export const authConfig = {
 
       if (!isLoggedIn) return false; // everything else requires a session
 
-      // Coarse, JWT-based module gate. Authoritative re-check happens in the
-      // DAL on every data read / Server Action (defense in depth).
-      const moduleKey = moduleForPath(path);
-      if (moduleKey && !canAccess(auth!.user.modules, moduleKey)) {
-        // Don't dump them on a blank dashboard with no explanation — send them
-        // to an access-denied page that names what they tried to open.
-        return Response.redirect(new URL(`/dashboard/access-denied?from=${moduleKey}`, nextUrl));
-      }
+      // Authentication only — per-module authorization is NOT decided here.
+      // The JWT carries a login-time role snapshot that cannot see per-user
+      // extra grants and goes stale on a role change, so gating here silently
+      // denied access the data layer had granted (NEW-HUBAUTHZ-01).
+      // `requireModule` in lib/dal.ts is the single authority: it re-reads the
+      // effective module set (role ∪ extras) on every page and Server Action.
+      // Do not re-add a module gate here.
       return true;
     },
-    // Carry id + role + module snapshot from the user record into the JWT…
+    // Carry id + role + module snapshot from the user record into the JWT.
+    // NOTE: token.modules is a login-time snapshot kept only for display
+    // (session.user.modules) — it is NOT an authorization input for routing.
+    // Authoritative module checks re-read the DB in lib/dal.ts (HUBAUTHZ-01).
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;

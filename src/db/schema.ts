@@ -463,7 +463,7 @@ export const appInvite = pgTable("app_invite", {
 	acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	uniqueIndex("ix_app_invite_token_hash").using("btree", table.tokenHash.asc().nullsLast().op("text_ops")),
-	index("ix_app_invite_email").using("btree", table.email.asc().nullsLast().op("text_ops")),
+	index("ix_app_invite_email").using("btree", sql`lower(${table.email})`),
 	index("ix_app_invite_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
 	foreignKey({
 			columns: [table.roleId],
@@ -563,11 +563,16 @@ export const sponsorLeads = pgTable("sponsor_lead", {
 // here. The hub reads it only to show a "matched member" hint in Member Support.
 // Declared with just the columns the hub reads. ---
 
+// This physical table is declared twice (see ARCH-03). Every column here must
+// be given an explicit SQL name — Drizzle's casing cache is keyed on the table
+// name and only the FIRST declaration queried in a process fills it, so an
+// inferred name from the second declaration resolves to `undefined` and Drizzle
+// emits `members.undefined` (NEW-SCHEMA-02).
 export const members = pgTable("members", {
-	id: serial().primaryKey().notNull(),
+	id: serial("id").primaryKey().notNull(),
 	studentId: varchar("student_id", { length: 32 }).notNull(),
 	fullName: varchar("full_name", { length: 256 }),
-	email: varchar({ length: 256 }),
+	email: varchar("email", { length: 256 }),
 	dusaMember: boolean("dusa_member").default(false).notNull(),
 	endDate: date("end_date", { mode: 'string' }),
 	isCurrent: boolean("is_current").default(true).notNull(),
@@ -577,7 +582,10 @@ export const members = pgTable("members", {
 // `scripts/add-portal-account-table.ts`, NOT Alembic). One row per portal login
 // (OAuth identity + DUSA-membership lifecycle). The hub's Member Support view
 // reads these and writes `manual_override` to approve/reject access. ---
-
+//
+// UNIQUE on lower(email): one portal account per student regardless of how they
+// capitalise their address. Created by dsec-app/scripts/add-portal-account-table.ts,
+// NOT by Alembic. Any insert path must compare case-insensitively.
 export const portalAccount = pgTable("portal_account", {
 	id: serial().primaryKey().notNull(),
 	email: varchar({ length: 256 }).notNull(),
@@ -600,7 +608,7 @@ export const portalAccount = pgTable("portal_account", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
-	uniqueIndex("ix_portal_account_email").using("btree", table.email.asc().nullsLast()),
+	uniqueIndex("ix_portal_account_email").using("btree", sql`lower(${table.email})`),
 	index("ix_portal_account_status").using("btree", table.status.asc().nullsLast()),
 	index("ix_portal_account_member_id").using("btree", table.memberId.asc().nullsLast()),
 ]);

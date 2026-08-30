@@ -12,6 +12,7 @@ import { bool, int, jsonList, num, str } from "@/lib/form-data";
 import { revalidateWebsite } from "@/lib/revalidate-website";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
 import { logMutation } from "@/lib/usage";
 
 export type FormState = ActionResult;
@@ -138,6 +139,14 @@ export async function uploadSponsorDocument(
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { error: "Choose a PDF or image to upload." };
+  }
+  // Belt-and-braces: Vercel usually rejects an oversized body at the edge before
+  // this runs, but the platform error is unexplained. This makes the rule
+  // testable locally and survives a change of deployment target. See uploads.ts.
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      error: `That file is ${(file.size / 1_000_000).toFixed(1)} MB. The maximum is ${MAX_UPLOAD_LABEL}.`,
+    };
   }
 
   const out = new FormData();

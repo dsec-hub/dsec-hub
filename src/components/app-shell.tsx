@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { Icons, type IconName } from "@/components/icons";
 import { PreviewBanner } from "@/components/preview-banner";
@@ -45,7 +45,17 @@ function setCollapsedStore(next: boolean) {
   collapseListeners.forEach((cb) => cb());
 }
 
-function isActive(pathname: string, href: string) {
+function isActive(pathname: string, href: string, docType: string | null): boolean {
+  // "Docs" (/docs) and "Pages" (/docs?type=Page) share one route, so a plain
+  // startsWith can't tell them apart — `pathname` never carries the query
+  // string. Distinguish them by the `type` search param (NEW-UXA11Y-03).
+  if (href === "/docs") {
+    // Docs: the list without the Pages filter, plus any /docs/<id> detail page.
+    return pathname.startsWith("/docs") && !(pathname === "/docs" && docType === "Page");
+  }
+  if (href === "/docs?type=Page") {
+    return pathname === "/docs" && docType === "Page";
+  }
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
@@ -248,7 +258,7 @@ export function AppShell({
       {/* Inset content: a rounded "surface" card floating on the tinted page
           floor (md+), replacing the old hard divider between nav and content.
           On mobile it stays edge-to-edge under the top bar. */}
-      <main className="min-w-0 flex-1 md:py-2 md:pr-2">
+      <main id="main" tabIndex={-1} className="min-w-0 flex-1 md:py-2 md:pr-2">
         {previewRoleName && <PreviewBanner roleName={previewRoleName} />}
         <div className="md:h-full md:rounded-2xl md:bg-surface md:shadow-sm">
           <div className="mx-auto max-w-6xl px-5 py-8 sm:px-6">{children}</div>
@@ -315,6 +325,10 @@ function SidebarNav({
     () => parseCollapsedGroups(groupsRaw),
     [groupsRaw],
   );
+  // Distinguishes the Docs and Pages nav items, which share the /docs route
+  // (NEW-UXA11Y-03). usePathname doesn't re-render on a query-only change, so we
+  // read the param here where a change to it re-renders the nav.
+  const docType = useSearchParams().get("type");
 
   return (
     <nav className="mt-2 flex flex-1 flex-col gap-0.5 overflow-y-auto">
@@ -348,7 +362,7 @@ function SidebarNav({
             {!folded && (
               <div className="flex flex-col gap-0.5">
                 {group.items.map((item) => {
-                  const active = isActive(pathname, item.href);
+                  const active = isActive(pathname, item.href, docType);
                   const Icon = Icons[item.icon];
                   return (
                     <Link
@@ -387,7 +401,7 @@ function SettingsLink({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const active = isActive(pathname, "/settings");
+  const active = isActive(pathname, "/settings", null);
   return (
     <Link
       href="/settings"

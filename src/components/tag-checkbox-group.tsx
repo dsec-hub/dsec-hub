@@ -8,10 +8,16 @@ import { useState } from "react";
  * multi-value fields like sponsor/event support types.
  */
 export function TagCheckboxGroup({
+  id,
   name,
   options,
   defaultValue,
 }: {
+  /** Injected by Field. A group of toggles has no single focusable control, so
+   *  instead of naming one button we mark the wrapper as a role="group" and
+   *  point it at Field's <label> via aria-labelledby (`${id}-label`). The id
+   *  also lives on the wrapper so Field's label htmlFor isn't an orphan. */
+  id?: string;
   name: string;
   options: readonly string[];
   defaultValue?: string[] | null;
@@ -30,7 +36,7 @@ export function TagCheckboxGroup({
   }
 
   return (
-    <div>
+    <div id={id} role="group" aria-labelledby={id ? `${id}-label` : undefined}>
       <input type="hidden" name={name} value={JSON.stringify([...selected])} />
       <div className="flex flex-wrap gap-2">
         {options.map((opt) => {

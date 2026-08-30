@@ -20,7 +20,7 @@ import {
 } from "@/db/workspace-schema";
 import type { CurrentUser } from "@/lib/dal";
 import { formatAUD, formatDate } from "@/lib/format";
-import { canAccess, type ModuleKey } from "@/lib/rbac";
+import { canAccess, isAdmin, type ModuleKey } from "@/lib/rbac";
 import { committeeScopeOf, type CommitteeScope } from "@/lib/scope";
 
 /**
@@ -78,8 +78,9 @@ export const ARCHIVE_META: Record<ArchiveKey, Meta> = {
   scan_target: { module: "scan", label: "Scan cards", icon: "camera" },
 };
 
-/** Section order on the Archive page. */
-const ARCHIVE_ORDER: ArchiveKey[] = [
+/** Section order on the Archive page. Also the allow-list the Archive Server
+ * Actions check against — keep exactly one copy of this list. */
+export const ARCHIVE_ORDER: ArchiveKey[] = [
   "event",
   "task",
   "board",
@@ -129,6 +130,10 @@ export async function getArchive(user: CurrentUser): Promise<ArchiveGroup[]> {
   const can = (m: ModuleKey) => canAccess(user.modules, m);
   const scope = committeeScopeOf(user);
   const empty = Promise.resolve([] as never[]);
+  // Hidden roster rows (people.admin_only) are admin-only on EVERY read path.
+  // Mirrors the `includeHidden` convention in lib/queries.ts:185 — keep the two
+  // in step. (The write side — Restore/Delete of a hidden person — is SEC-14.)
+  const includeHidden = isAdmin(user.modules);
 
   const [
     eventRows,
@@ -201,7 +206,11 @@ export async function getArchive(user: CurrentUser): Promise<ArchiveGroup[]> {
             committee: people.committee,
           })
           .from(people)
-          .where(eq(people.archived, true))
+          .where(
+            includeHidden
+              ? eq(people.archived, true)
+              : and(eq(people.archived, true), eq(people.adminOnly, false)),
+          )
           .orderBy(desc(people.id))
           .limit(LIMIT)
       : empty,

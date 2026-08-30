@@ -182,8 +182,10 @@ export function EventForm({
         <Field label="Committee">
           <CommitteeSelect committees={committees} defaultValue={e?.committee} />
         </Field>
-        <Field label="Start date" hint="We host on Thursdays, 6–8pm.">
-          <DateField name="start_date" value={startDate} onChange={onStartChange} />
+        {/* Two children (the picker + the suggest button), so Field can't
+            auto-inject an id — give it an explicit htmlFor/id pair. */}
+        <Field label="Start date" htmlFor="event-start-date" hint="We host on Thursdays, 6–8pm.">
+          <DateField id="event-start-date" name="start_date" value={startDate} onChange={onStartChange} />
           {!isCompleted && (
             <button
               type="button"

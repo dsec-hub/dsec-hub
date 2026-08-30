@@ -1,14 +1,69 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { assistanceRequest, portalAccount } from "@/db/schema";
+import { assistanceRequest, members, portalAccount } from "@/db/schema";
 import { requireAdmin } from "@/lib/dal";
 
 function nowISO() {
   return new Date().toISOString();
+}
+
+/** A roster candidate the committee can link a portal account to. `isCurrent`
+ * is surfaced because linking to a not-current member produces a card the door
+ * scanner rejects (NEW-APPDEEP-02) — the picker must warn before that. */
+export type RosterCandidate = {
+  id: number;
+  fullName: string | null;
+  studentId: string;
+  email: string | null;
+  isCurrent: boolean;
+};
+
+/**
+ * Search the DUSA roster by name or student id, for manually linking an account
+ * whose email never matched (NEW-APPDEEP-01). Current members first.
+ */
+export async function searchRosterMembers(query: string): Promise<RosterCandidate[]> {
+  await requireAdmin();
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const like = `%${q}%`;
+  return db
+    .select({
+      id: members.id,
+      fullName: members.fullName,
+      studentId: members.studentId,
+      email: members.email,
+      isCurrent: members.isCurrent,
+    })
+    .from(members)
+    .where(
+      or(
+        sql`lower(${members.fullName}) like ${like}`,
+        sql`lower(${members.studentId}) like ${like}`,
+      ),
+    )
+    .orderBy(desc(members.isCurrent), asc(members.fullName))
+    .limit(10);
+}
+
+/**
+ * Link a portal account to its roster record by writing `portal_account.member_id`
+ * — the id dsec-api keys the membership card + QR to. A manually-approved account
+ * never gets this from the automatic roster match, so without it the member sees
+ * a card that loads forever (NEW-APPDEEP-01). Records the admin in `overrideBy`.
+ * No migration: the column already exists and is simply never written elsewhere.
+ */
+export async function linkAccountToMember(accountId: number, memberId: number): Promise<void> {
+  const admin = await requireAdmin();
+  await db
+    .update(portalAccount)
+    .set({ memberId, overrideBy: admin.email, updatedAt: nowISO() })
+    .where(eq(portalAccount.id, accountId));
+  revalidatePath("/admin/members");
 }
 
 /**

@@ -14,12 +14,16 @@ type Option = { id: number; name: string };
  * person can't be both primary and co-owner; the server de-dupes regardless.
  */
 export function PeopleMultiSelect({
+  id,
   name,
   people,
   defaultSelected = [],
   excludeId,
   emptyHint = "No one selected yet.",
 }: {
+  /** Injected by Field so its <label> can point at the search input (the first
+   *  focusable control in the group). */
+  id?: string;
   name: string;
   people: Option[];
   defaultSelected?: number[];
@@ -77,6 +81,7 @@ export function PeopleMultiSelect({
       )}
 
       <input
+        id={id}
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}

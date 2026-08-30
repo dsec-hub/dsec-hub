@@ -11,6 +11,9 @@ import {
   canAccess,
   canManageRelatedTasks,
   canWrite,
+  canWriteTask,
+  canWriteTaskWith,
+  clampMemberTask,
   isAdmin,
   isOwner,
   levelsToArrays,
@@ -102,6 +105,59 @@ eq("scopeFor: module → full", scopeFor(true, false), "full");
 eq("scopeFor: module + owns → full", scopeFor(true, true), "full");
 eq("scopeFor: no module + owns → owned", scopeFor(false, true), "owned");
 eq("scopeFor: no module, owns none → none", scopeFor(false, false), "none");
+
+// --- canWriteTaskWith / canWriteTask: one definition of the ownership rule (HUBAUTHZ-09) ---
+check("canWriteTaskWith: module writer writes any task", canWriteTaskWith(true, 5, 6) === true);
+check("canWriteTaskWith: owner may write own task", canWriteTaskWith(false, 5, 5) === true);
+check("canWriteTaskWith: non-owner denied", canWriteTaskWith(false, 5, 6) === false);
+check("canWriteTaskWith: no roster link owns nothing", canWriteTaskWith(false, null, null) === false);
+// canWriteTask delegates to canWriteTaskWith and still treats admin as a writer.
+check("canWriteTask: admin writes any task", canWriteTask(["admin"], [], 5, 6) === true);
+check("canWriteTask: tasks writer writes any task", canWriteTask(["tasks"], ["tasks"], 5, 6) === true);
+check("canWriteTask: member writes own task", canWriteTask(["tasks"], [], 5, 5) === true);
+check("canWriteTask: member denied other's task", canWriteTask(["tasks"], [], 5, 6) === false);
+
+// --- clampMemberTask: a non-writer member can't set management fields (HUBAUTHZ-08) ---
+const memberValues = {
+  title: "My task",
+  status: "In Progress",
+  priority: "High",
+  dueDate: "2026-09-01",
+  description: "notes",
+  assigneeId: 999, // member tried to reassign away from themselves
+  boardId: 42, // member tried to move it onto another board
+  committee: "Marketing", // member tried to retag its committee
+  relatedEventId: 7,
+  relatedProjectId: 8,
+};
+const priorRow = {
+  assigneeId: 3,
+  boardId: 10,
+  committee: "Design",
+  relatedEventId: null,
+  relatedProjectId: 20,
+};
+
+// update: prior management fields win, assignee forced to self, rest untouched.
+const clampedUpdate = clampMemberTask(memberValues, priorRow, 5);
+eq("clampMemberTask update: keeps prior boardId", clampedUpdate.boardId, 10);
+eq("clampMemberTask update: keeps prior committee", clampedUpdate.committee, "Design");
+eq("clampMemberTask update: keeps prior relatedEventId", clampedUpdate.relatedEventId, null);
+eq("clampMemberTask update: keeps prior relatedProjectId", clampedUpdate.relatedProjectId, 20);
+eq("clampMemberTask update: forces self-assignment", clampedUpdate.assigneeId, 5);
+eq("clampMemberTask update: title passes through", clampedUpdate.title, "My task");
+eq("clampMemberTask update: status passes through", clampedUpdate.status, "In Progress");
+eq("clampMemberTask update: priority passes through", clampedUpdate.priority, "High");
+eq("clampMemberTask update: dueDate passes through", clampedUpdate.dueDate, "2026-09-01");
+eq("clampMemberTask update: description passes through", clampedUpdate.description, "notes");
+
+// create: prior === null → all four management fields cleared, assignee forced to self.
+const clampedCreate = clampMemberTask(memberValues, null, 5);
+eq("clampMemberTask create: null boardId", clampedCreate.boardId, null);
+eq("clampMemberTask create: null committee", clampedCreate.committee, null);
+eq("clampMemberTask create: null relatedEventId", clampedCreate.relatedEventId, null);
+eq("clampMemberTask create: null relatedProjectId", clampedCreate.relatedProjectId, null);
+eq("clampMemberTask create: forces self-assignment", clampedCreate.assigneeId, 5);
 
 if (failures.length) {
   console.error(`\n❌ ${failures.length} FAILED:\n - ${failures.join("\n - ")}`);

@@ -217,12 +217,56 @@ export function canManageRelatedTasks(
  * write any task; otherwise a user may write only the tasks ASSIGNED to them
  * (the "Member edits their own tasks" rule). Pure — used both to gate the UI
  * and as the authoritative check in task Server Actions. */
+/** canWriteTask when the module-tier answer is already known — the task board
+ * passes `fullWrite` down as a prop rather than the raw module arrays. Keeps
+ * ONE definition of the ownership half of the rule. */
+export function canWriteTaskWith(
+  fullWrite: boolean,
+  personId: number | null | undefined,
+  assigneeId: number | null | undefined,
+): boolean {
+  return fullWrite || isOwner(personId, assigneeId);
+}
+
 export function canWriteTask(
   modules: readonly string[] | null | undefined,
   writeModules: readonly string[] | null | undefined,
   personId: number | null | undefined,
   assigneeId: number | null | undefined,
 ): boolean {
-  if (canWrite(modules, writeModules, "tasks")) return true;
-  return isOwner(personId, assigneeId);
+  return canWriteTaskWith(canWrite(modules, writeModules, "tasks"), personId, assigneeId);
+}
+
+/** The task fields that are MANAGEMENT actions: only a tasks-writer may set
+ * them. Everything else (title, status, priority, due date, description) is
+ * fair game for a member editing their own task. */
+export type TaskManagementFields = {
+  assigneeId: number | null;
+  boardId: number | null;
+  committee: string | null;
+  relatedEventId: number | null;
+  relatedProjectId: number | null;
+};
+
+/**
+ * Clamp a parsed task payload for a user WITHOUT tasks write. Management fields
+ * come from the stored row (`prior`), or are cleared for a brand-new task
+ * (`prior === null`); the assignee is forced to the member themselves.
+ *
+ * This is the same rule reassignTask enforces for drag-and-drop — keep exactly
+ * one definition of it. Pure: tested in rbac.test.ts.
+ */
+export function clampMemberTask<T extends TaskManagementFields>(
+  values: T,
+  prior: TaskManagementFields | null,
+  personId: number | null,
+): T {
+  return {
+    ...values,
+    assigneeId: personId,
+    boardId: prior?.boardId ?? null,
+    committee: prior?.committee ?? null,
+    relatedEventId: prior?.relatedEventId ?? null,
+    relatedProjectId: prior?.relatedProjectId ?? null,
+  };
 }

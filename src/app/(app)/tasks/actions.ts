@@ -8,14 +8,15 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { taskBoards, tasks } from "@/db/workspace-schema";
 import { assertNotPreviewing, requireModule, requireWrite, type CurrentUser } from "@/lib/dal";
-import { canManageRelatedTasks, canWrite, canWriteTask } from "@/lib/rbac";
+import { canManageRelatedTasks, canWrite, canWriteTask, clampMemberTask } from "@/lib/rbac";
 import { int, str } from "@/lib/form-data";
 import { notifyTaskAssigned } from "@/lib/notifications/events";
 import { coOwnerIdsOf, getTaskOwnerIds, setTaskOwners } from "@/lib/owners";
 import { archiveToken, createToken, snapshotForDelete, snapshotForUpdate } from "@/lib/undo";
 import type { ActionResult } from "@/lib/undo-types";
 import { logMutation } from "@/lib/usage";
-import { DEFAULT_BOARD_COLUMNS } from "@/lib/workspace-options";
+import { isKnownCommittee } from "@/lib/committee-queries";
+import { DEFAULT_BOARD_COLUMNS, validPriority } from "@/lib/workspace-options";
 import type { TaskParentKind } from "@/lib/workspace-queries";
 
 export type FormState = ActionResult;
@@ -185,9 +186,11 @@ export async function createTask(_prev: FormState, fd: FormData): Promise<FormSt
   const user = await requireModule("tasks");
   assertNotPreviewing(user);
   const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
-  const values = parseTask(fd);
+  let values = parseTask(fd);
   if (!values.title) return { error: "Title is required." };
-  if (!fullWrite) values.assigneeId = user.personId; // force self-assignment
+  // A member's new task carries no management fields (board/committee/related)
+  // and is forced self-assigned. Same rule reassignTask enforces.
+  if (!fullWrite) values = clampMemberTask(values, null, user.personId);
   const [row] = await db.insert(tasks).values(values).returning({ id: tasks.id });
   await logMutation(user, "create", "task", row?.id);
   notifyAssignmentAfter(row?.id, values.assigneeId, user.id);
@@ -210,16 +213,26 @@ export async function updateTask(
 ): Promise<FormState> {
   const user = await assertTaskWrite(id);
   const fullWrite = canWrite(user.modules, user.writeModules, "tasks");
-  const values = parseTask(fd);
+  let values = parseTask(fd);
   if (!values.title) return { error: "Title is required." };
-  // A member editing their own task can't reassign it away from themselves.
-  if (!fullWrite) values.assigneeId = user.personId;
-  // Capture the prior assignee so we notify only on a real reassignment.
+  // Read the prior row BEFORE clamping — a member's management fields
+  // (board/committee/related) are preserved from it, so it must be read first
+  // or we'd write null over the task's real board and committee. Also captures
+  // the prior assignee so we notify only on a real reassignment.
   const [priorTask] = await db
-    .select({ assigneeId: tasks.assigneeId })
+    .select({
+      assigneeId: tasks.assigneeId,
+      boardId: tasks.boardId,
+      committee: tasks.committee,
+      relatedEventId: tasks.relatedEventId,
+      relatedProjectId: tasks.relatedProjectId,
+    })
     .from(tasks)
     .where(eq(tasks.id, id))
     .limit(1);
+  // A member editing their own task can't reassign it away from themselves or
+  // move it onto another board/committee/related entity.
+  if (!fullWrite) values = clampMemberTask(values, priorTask ?? null, user.personId);
   const undo = await snapshotForUpdate("task", id);
   await db
     .update(tasks)
@@ -286,9 +299,18 @@ export async function createSubtask(parentId: number, fd: FormData): Promise<voi
   revalidateTasks();
 }
 
-/** Tick / untick a subtask (sets status + completedAt). */
+/** Tick / untick a subtask (sets status + completedAt). Authorised against the
+ * PARENT task, not the child: a member who owns the parent (the "edit your own
+ * work" rule, enabled on the edit page by NEW-HUBAUTHZ-09) may tick its
+ * subtasks — including ones a full writer created unassigned — without being
+ * bounced to /dashboard. Falls back to the child if it has no parent. */
 export async function toggleSubtask(childId: number, done: boolean): Promise<void> {
-  const user = await assertTaskWrite(childId);
+  const [child] = await db
+    .select({ parentTaskId: tasks.parentTaskId })
+    .from(tasks)
+    .where(eq(tasks.id, childId))
+    .limit(1);
+  const user = await assertTaskWrite(child?.parentTaskId ?? childId);
   const now = new Date().toISOString();
   await db
     .update(tasks)
@@ -473,13 +495,26 @@ export async function reassignTask(taskId: number, dim: string, value: string): 
       set.status = value;
       set.completedAt = value === "Done" ? now : null;
       break;
-    case "priority":
-      set.priority = value && value !== "__none__" ? value : null;
+    case "priority": {
+      const p = validPriority(value);
+      if (p === undefined) return; // unknown priority — ignore rather than crash
+      set.priority = p;
       break;
-    case "committee":
+    }
+    case "committee": {
       if (!fullWrite) return;
-      set.committee = value && value !== "__none__" ? value : null;
+      if (!value || value === "__none__") {
+        set.committee = null;
+        break;
+      }
+      // Validate against the committee table (COL-HUB-04); the club adds and
+      // renames committees, so a hardcoded list would drift. isKnownCommittee
+      // fails OPEN, so an unknown-but-nonempty name is only rejected below when
+      // it is genuinely absent.
+      if (!(await isKnownCommittee(value))) return; // unknown committee — ignore rather than crash
+      set.committee = value;
       break;
+    }
     case "board":
       if (!fullWrite) return;
       set.boardId = value === "inbox" || value === "" ? null : Number(value) || null;

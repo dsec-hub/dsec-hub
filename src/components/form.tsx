@@ -30,19 +30,29 @@ export function Field({
     const childProps = children.props as { id?: string };
     controlId = childProps.id ?? autoId;
     if (!childProps.id) {
+      // CONTRACT: any component used as a Field child must accept `id` and
+      // render it on its focusable element (a group renders it on the
+      // role="group" wrapper and reads its label via aria-labelledby). This
+      // clone fails silently otherwise — a new composite that drops `id`
+      // reintroduces the orphan-label bug with no warning (NEW-UXA11Y-02).
       control = cloneElement(children as React.ReactElement<{ id?: string }>, {
         id: controlId,
       });
     }
   }
+  // Give the label a stable id so a grouped control (role="group") can point at
+  // it with aria-labelledby — see TagCheckboxGroup.
+  const labelId = controlId ? `${controlId}-label` : undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={controlId} className="text-sm text-muted">
+      <label htmlFor={controlId} id={labelId} className="text-sm text-muted">
         {label}
       </label>
       {control}
-      {hint && !error && <p className="text-xs text-muted/70">{hint}</p>}
+      {/* Show the hint AND the error together — format guidance must not vanish
+          at the moment the user got the format wrong (NEW-UXA11Y-02). */}
+      {hint && <p className="text-xs text-muted/70">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
