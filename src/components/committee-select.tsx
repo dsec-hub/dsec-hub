@@ -28,10 +28,13 @@ export function CommitteeDot({
  * saving the form never silently drops the existing assignment.
  */
 export function CommitteeSelect({
+  id,
   committees,
   defaultValue,
   name = "committee",
 }: {
+  /** Injected by Field so its <label> can point at the underlying <select>. */
+  id?: string;
   committees: CommitteeChoice[];
   defaultValue?: string | null;
   name?: string;
@@ -39,7 +42,7 @@ export function CommitteeSelect({
   const current = defaultValue ?? "";
   const inList = committees.some((c) => c.name === current);
   return (
-    <SelectField name={name} defaultValue={current}>
+    <SelectField id={id} name={name} defaultValue={current}>
       <option value="">—</option>
       {current && !inList && <option value={current}>{current} (inactive)</option>}
       {committees.map((c) => (
