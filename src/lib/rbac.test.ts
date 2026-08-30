@@ -18,6 +18,7 @@ import {
   isOwner,
   levelsToArrays,
   levelFor,
+  MODULE_KEYS,
   sanitizeModules,
   sanitizeWriteModules,
   scopeFor,
@@ -33,6 +34,15 @@ function check(name: string, cond: boolean) {
 function eq(name: string, a: unknown, b: unknown) {
   check(name, JSON.stringify(a) === JSON.stringify(b));
 }
+
+// --- MODULE_KEYS: the single source of truth for gateable modules ---
+// Pin the full set so an accidental deletion from MODULES (rbac.ts) is caught,
+// and so the setup scripts + docs that derive from it stay honest.
+eq(
+  "MODULE_KEYS: the full gateable module set",
+  [...MODULE_KEYS].sort(),
+  ["admin","documents","events","finance","links","meetings","members","partners","people","projects","scan","sponsors","tasks"],
+);
 
 // --- canAccess: module read, admin = superuser ---
 check("canAccess: has module", canAccess(["projects"], "projects") === true);

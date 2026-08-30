@@ -65,11 +65,13 @@ been applied yet — see `dsec-api`.
 
 ## Modules
 
-The authenticated app lives under `src/app/(app)/`. The **Overview**
-(`/dashboard`) is always available; every other module is gated by the user's role
-(`events`, `people`, `projects`, `sponsors`, `finance`, `members`, `tasks`,
-`meetings`, `documents`, `media`, `settings`, `admin`). Admins manage users, roles,
-and invites from `/admin`. See [`ROLES.md`](./ROLES.md) for the full RBAC model.
+The authenticated app lives under `src/app/(app)/`. The **Overview** (`/dashboard`)
+is always available to any active user, and so are `/media` and `/settings` — they
+are deliberately ungated. Every other section is gated by the user's role; the
+authoritative list of gateable modules is `MODULES` in
+[`src/lib/rbac.ts`](./src/lib/rbac.ts), which the setup scripts import directly.
+Admins manage users, roles and invites from `/admin`. See [`ROLES.md`](./ROLES.md)
+for the full RBAC model.
 
 ## Environment
 
