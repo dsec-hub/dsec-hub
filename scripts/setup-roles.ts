@@ -17,9 +17,12 @@ import { MODULE_KEYS } from "../src/lib/rbac";
 config({ path: ".env.local" });
 
 // Derived from the single source of truth in src/lib/rbac.ts — never hand-edit.
-// `admin` is the superuser flag and the admin panel; APP_MODULES is everything else.
-const APP_MODULES = MODULE_KEYS.filter((k) => k !== "admin");
-const ALL_MODULES = [...MODULE_KEYS];
+// `admin` is the superuser flag and the admin panel; APP_MODULES is every
+// operational module. `api_tokens` is a capability gate, not an operational
+// module (SEC-06): it is granted explicitly in the role editor and must never
+// be seeded onto Exec/Auditor — admins mint keys via the isAdmin short-circuit.
+const APP_MODULES = MODULE_KEYS.filter((k) => k !== "admin" && k !== "api_tokens");
+const ALL_MODULES = MODULE_KEYS.filter((k) => k !== "api_tokens");
 
 // `modules` = sections a role can SEE; `writeModules` = the subset it can also
 // EDIT (write ⊆ read). "admin" is a superuser for both.
