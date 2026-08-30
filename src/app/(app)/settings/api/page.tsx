@@ -74,6 +74,8 @@ export default async function ApiSettingsPage() {
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{t.name}</span>
                       {t.revoked && <Badge variant="danger">Revoked</Badge>}
+                      {!t.revoked && t.expired && <Badge variant="danger">Expired</Badge>}
+                      {!t.revoked && t.expiringSoon && <Badge variant="warning">Expiring soon</Badge>}
                     </div>
                     <p className="mt-0.5 font-mono text-xs text-muted">{t.prefix}…</p>
                     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
@@ -85,6 +87,7 @@ export default async function ApiSettingsPage() {
                       <span className="text-muted/70">
                         · created {formatDate(t.createdAt)}
                         {t.lastUsedAt ? ` · last used ${formatDate(t.lastUsedAt)}` : " · never used"}
+                        {t.expiresAt ? ` · ${t.expired ? "expired" : "expires"} ${formatDate(t.expiresAt)}` : ""}
                       </span>
                     </p>
                   </div>

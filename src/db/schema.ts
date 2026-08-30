@@ -37,6 +37,9 @@ export const apiKey = pgTable("api_key", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).notNull(),
 	createdBy: varchar("created_by", { length: 256 }),
 	lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: 'string' }),
+	// Owned by dsec-api (SEC-07c). NULL = never expires; newly minted keys get a
+	// 180-day default. Read-only here so Settings → API can warn before expiry.
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }),
 	revoked: boolean().notNull(),
 }, (table) => [
 	uniqueIndex("ix_api_key_prefix").using("btree", table.prefix.asc().nullsLast().op("text_ops")),
