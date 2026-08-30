@@ -1,8 +1,11 @@
 import "server-only";
 
+import { randomBytes } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { eq, getTableColumns } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import bcrypt from "bcryptjs";
 
 import { db } from "@/db";
 import { appRole, appSetting, appUser, committee, events, finance, people, sponsors } from "@/db/schema";
@@ -80,6 +83,47 @@ function idColumn(table: PgTable) {
   return getTableColumns(table).id;
 }
 
+/**
+ * SEC-15: per-table column denylist. Undo tokens round-trip through the browser
+ * and the payload is base64url JSON — signed (tamper-evident) but NOT encrypted,
+ * so anyone holding the token can read the snapshot inside. `readRow` strips
+ * these columns from every snapshot BEFORE it is signed, so a secret never rides
+ * an undo token to the client. Applied inside `readRow` (not at the call sites)
+ * so the dynamic-key `/archive` path is covered for free.
+ *
+ * Keys are the Drizzle JS column names — what `db.select()` returns and what
+ * `pickColumns` filters on — NOT the snake_case DB names. `placeholder`, when
+ * set, supplies a safe value re-inserted on a DELETE-restore for a NOT-NULL
+ * column that was stripped on capture (see `applyUndo`); a nullable denied
+ * column needs none (absent on restore just leaves it NULL).
+ *
+ * Every one of REGISTRY's 19 tables was audited; only these two carry a secret:
+ *   user    → passwordHash      (app_user.password_hash — NOT NULL, len 512)
+ *   meeting → agendaShareToken  (meeting.agenda_share_token — nullable, len 64;
+ *                                a share-link capability token, safe to drop on
+ *                                restore since it is nullable)
+ * api_key.key_hash and app_invite.token_hash are also secrets, but their tables
+ * are NOT in REGISTRY (unreachable via undo), so they are deliberately absent.
+ */
+type DeniedColumn = { placeholder?: () => Promise<unknown> | unknown };
+
+/**
+ * A valid but unusable bcrypt hash of a random, immediately-discarded secret.
+ * Lets a deleted user row restore without violating `password_hash` NOT NULL and
+ * without leaking (or guessably reconstructing) the real hash — the account is
+ * non-loginable until an admin resets its password. `crypto.randomBytes` (never
+ * `Math.random`) makes the discarded input unguessable; cost 12 matches the
+ * repo's password policy (lib/password.ts).
+ */
+async function unusablePasswordHash(): Promise<string> {
+  return bcrypt.hash(randomBytes(32).toString("hex"), 12);
+}
+
+const COLUMN_DENYLIST: Partial<Record<UndoKey, Record<string, DeniedColumn>>> = {
+  user: { passwordHash: { placeholder: unusablePasswordHash } },
+  meeting: { agendaShareToken: {} },
+};
+
 async function readRow(key: UndoKey, id: number): Promise<Record<string, unknown> | undefined> {
   const { table } = REGISTRY[key];
   const [row] = await db
@@ -87,7 +131,15 @@ async function readRow(key: UndoKey, id: number): Promise<Record<string, unknown
     .from(table as LooseTable)
     .where(eq(idColumn(table), id))
     .limit(1);
-  return row as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  // Drop denied columns before the snapshot is signed + handed to the browser.
+  const denied = COLUMN_DENYLIST[key];
+  if (denied) {
+    for (const col of Object.keys(denied)) {
+      delete (row as Record<string, unknown>)[col];
+    }
+  }
+  return row as Record<string, unknown>;
 }
 
 // The snapshot/create helpers return a SIGNED token string (see undo-sign.ts) so
@@ -148,8 +200,21 @@ export async function applyUndo(token: UndoToken): Promise<void> {
       .set(pickColumns(table, token.prev))
       .where(eq(idColumn(table), token.id));
   } else {
-    // reverse a hard delete → re-insert the captured row (same id)
-    await db.insert(table as LooseTable).values(pickColumns(table, token.row));
+    // reverse a hard delete → re-insert the captured row (same id). A secret
+    // column stripped on capture (COLUMN_DENYLIST) is absent from the snapshot;
+    // if it is NOT NULL the insert would throw, turning undo into permanent data
+    // loss — so re-supply a safe placeholder. Denylist-driven, not a one-off:
+    // today only user.passwordHash carries a placeholder and so actually fires.
+    const values = pickColumns(table, token.row);
+    const denied = COLUMN_DENYLIST[token.key];
+    if (denied) {
+      for (const [col, meta] of Object.entries(denied)) {
+        if (meta.placeholder && !(col in values)) {
+          values[col] = await meta.placeholder();
+        }
+      }
+    }
+    await db.insert(table as LooseTable).values(values);
   }
 
   reg.paths.forEach((p) => revalidatePath(p));
