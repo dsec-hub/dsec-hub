@@ -11,7 +11,7 @@ import {
 } from "@/components/ui";
 import { requireModule } from "@/lib/dal";
 import { cn, formatDate } from "@/lib/format";
-import { getMemberStats, getMembers } from "@/lib/workspace-queries";
+import { getMemberStats, getMembers, getMembersCount } from "@/lib/workspace-queries";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -36,11 +36,17 @@ export default async function MembersPage({
   const { q, filter } = await searchParams;
   const activeFilter = filter === "dusa" || filter === "non-dusa" ? filter : "all";
 
-  const [stats, allRows] = await Promise.all([
+  const PAGE_SIZE = 500;
+  const memberFilter = {
+    search: q,
+    dusaOnly: activeFilter === "dusa",
+    nonDusaOnly: activeFilter === "non-dusa",
+  };
+  const [stats, rows, total] = await Promise.all([
     getMemberStats(),
-    getMembers({ search: q, dusaOnly: activeFilter === "dusa" }),
+    getMembers({ ...memberFilter, limit: PAGE_SIZE }),
+    getMembersCount(memberFilter),
   ]);
-  const rows = activeFilter === "non-dusa" ? allRows.filter((m) => !m.dusaMember) : allRows;
 
   const latest = stats.trend[stats.trend.length - 1];
 
@@ -106,7 +112,11 @@ export default async function MembersPage({
 
       <div className="mt-6">
         <SectionCard
-          title={`${rows.length} member${rows.length === 1 ? "" : "s"}`}
+          title={
+            rows.length < total
+              ? `Showing ${rows.length} of ${total} members`
+              : `${total} member${total === 1 ? "" : "s"}`
+          }
           action={q ? <span className="text-xs text-muted">matching “{q}”</span> : undefined}
         >
           {rows.length === 0 ? (

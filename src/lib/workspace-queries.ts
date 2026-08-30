@@ -76,20 +76,41 @@ export async function getMemberStats() {
   };
 }
 
-export async function getMembers(opts: { search?: string; dusaOnly?: boolean; currentOnly?: boolean } = {}) {
+type MemberFilter = { search?: string; dusaOnly?: boolean; nonDusaOnly?: boolean; currentOnly?: boolean };
+
+/** WHERE conditions shared by getMembers and getMembersCount so the list and its
+ * count can never disagree on what "matches". Returns undefined when no filter
+ * applies. */
+function memberConds(opts: MemberFilter) {
   const conds = [];
   if (opts.currentOnly !== false) conds.push(eq(members.isCurrent, true));
   if (opts.dusaOnly) conds.push(eq(members.dusaMember, true));
+  if (opts.nonDusaOnly) conds.push(eq(members.dusaMember, false));
   if (opts.search) {
     const q = `%${opts.search}%`;
     conds.push(or(ilike(members.fullName, q), ilike(members.email, q), ilike(members.studentId, q)));
   }
-  return db
+  return conds.length ? and(...conds) : undefined;
+}
+
+/** Members matching `opts`, alphabetical. `limit` caps the page (default 500, the
+ * historical cap that protects the page render); pass `limit: 0` to fetch every
+ * matching row (used by the CSV export, which paginates). `offset` pages through. */
+export async function getMembers(opts: MemberFilter & { limit?: number; offset?: number } = {}) {
+  const q = db
     .select()
     .from(members)
-    .where(conds.length ? and(...conds) : undefined)
+    .where(memberConds(opts))
     .orderBy(asc(members.fullName))
-    .limit(500);
+    .offset(opts.offset ?? 0);
+  return opts.limit === 0 ? q : q.limit(opts.limit ?? 500);
+}
+
+/** Total members matching `opts`, using the same filter as getMembers. The page
+ * uses this for an honest "Showing N of M" heading when the list is capped. */
+export async function getMembersCount(opts: MemberFilter = {}): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(members).where(memberConds(opts));
+  return num(row?.n);
 }
 
 export type MemberRow = typeof members.$inferSelect;
