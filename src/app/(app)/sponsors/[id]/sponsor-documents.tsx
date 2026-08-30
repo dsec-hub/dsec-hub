@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import { FormError } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
 import { Badge, EmptyState, SectionCard, buttonGhost } from "@/components/ui";
 import { formatDate } from "@/lib/format";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from "@/lib/uploads";
 import { useActionToast } from "@/lib/use-action-toast";
 import type { AttachmentRow } from "@/lib/workspace-queries";
 
@@ -35,6 +36,10 @@ export function SponsorDocuments({
   const [state, formAction] = useActionState<FormState, FormData>(action, undefined);
   useActionToast(state);
   const formRef = useRef<HTMLFormElement>(null);
+  // Client-side courtesy: catch an oversized file instantly, before the browser
+  // even attempts the upload (Vercel would otherwise reject the body with an
+  // unexplained platform error). The server re-checks — this is never a control.
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state?.ok) formRef.current?.reset();
@@ -86,19 +91,32 @@ export function SponsorDocuments({
 
       {canWrite && (
         <form ref={formRef} action={formAction} className="space-y-3 border-t border-border px-5 py-4">
-          <FormError>{state?.error}</FormError>
+          <FormError>{sizeError ?? state?.error}</FormError>
           <div className="flex flex-wrap items-center gap-3">
             <input
               type="file"
               name="file"
               required
               accept="application/pdf,image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f && f.size > MAX_UPLOAD_BYTES) {
+                  setSizeError(
+                    `That file is ${(f.size / 1_000_000).toFixed(1)} MB. The maximum is ${MAX_UPLOAD_LABEL} — please compress the PDF (most exporters have a "reduced size" option) or link to it instead.`,
+                  );
+                  e.target.value = "";
+                } else {
+                  setSizeError(null);
+                }
+              }}
               className="text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:text-foreground"
             />
             <SubmitButton>Upload</SubmitButton>
           </div>
           <p className="text-xs text-muted/70">
-            PDFs and images only. Files are auto-compressed on upload.
+            PDFs and images only, up to {MAX_UPLOAD_LABEL}. Images are compressed
+            automatically; PDFs are uploaded as-is, so compress a large deck before
+            uploading.
           </p>
         </form>
       )}
