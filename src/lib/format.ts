@@ -64,6 +64,13 @@ export function daysUntil(value: string | Date | null | undefined): number | nul
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
+/** ISO timestamp for `days` days before now — for "older than N days" queries.
+ * Lives here (not inlined in a Server Component) so the impure Date.now() call
+ * doesn't trip react-hooks/purity during render. */
+export function daysAgoISO(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
+
 /** Today as an ISO date string (YYYY-MM-DD), for date inputs and comparisons. */
 export function todayISO(): string {
   const d = new Date();

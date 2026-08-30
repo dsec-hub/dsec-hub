@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { count, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import {
   Badge,
@@ -13,7 +13,7 @@ import {
 import { db } from "@/db";
 import { assistanceRequest, members, portalAccount } from "@/db/schema";
 import { requireAdmin } from "@/lib/dal";
-import { cn, daysUntil, formatDate } from "@/lib/format";
+import { cn, daysAgoISO, daysUntil, formatDate } from "@/lib/format";
 import type { BadgeVariant } from "@/lib/options";
 
 import {
@@ -109,10 +109,7 @@ export default async function MemberSupportPage() {
       .where(
         or(
           isNull(portalAccount.lastCheckAt),
-          lt(
-            portalAccount.lastCheckAt,
-            new Date(Date.now() - STALE_AFTER_DAYS * 86_400_000).toISOString(),
-          ),
+          lt(portalAccount.lastCheckAt, daysAgoISO(STALE_AFTER_DAYS)),
         ),
       ),
   ]);
