@@ -14,6 +14,7 @@ export type ModuleKey =
   | "documents"
   | "links"
   | "scan"
+  | "api_tokens"
   | "admin";
 
 export type ModuleDef = {
@@ -39,6 +40,7 @@ export const MODULES: ModuleDef[] = [
   { key: "documents", label: "Docs", href: "/docs", description: "Notion-style docs, meeting notes, and deliverables." },
   { key: "links", label: "Link Tree", href: "/links", description: "The public link-tree page (profile + ordered link stack)." },
   { key: "scan", label: "Scan Wall", href: "/scan", description: "The public /scan QR wall shown on a screen at events." },
+  { key: "api_tokens", label: "API Tokens", href: "/settings/api", description: "Capability gate: lets a role mint personal API / MCP keys from Settings → API. Not a nav section; /settings/api itself stays viewable by any user." },
   { key: "admin", label: "Admin", href: "/admin", description: "Manage users, roles, and invites. Implies full access to every module." },
 ];
 

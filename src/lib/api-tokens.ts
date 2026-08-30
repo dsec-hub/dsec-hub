@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { apiKey } from "@/db/schema";
 import { apiBaseUrl, apiEnv } from "@/lib/api-env";
 import type { CurrentUser } from "@/lib/dal";
-import { canWrite, isAdmin } from "@/lib/rbac";
+import { canAccess, canWrite, isAdmin } from "@/lib/rbac";
 
 /**
  * Self-service MCP / API tokens.
@@ -56,17 +56,24 @@ export function ownerLabel(userId: number): string {
 
 /**
  * The scopes a user MAY mint, bounded by their dashboard role:
- *  - read:    can view any module
- *  - write:   can edit any module
+ *  - read:    can view any module — gated behind the `api_tokens` module
+ *  - write:   can edit any module — gated behind the `api_tokens` module
  *  - trigger: can edit Meetings (the AI meeting-notes surface)
  *  - ingest:  admin only (the DUSA import path)
  * Admins (superusers) get all four.
+ *
+ * `read`/`write` require the dedicated `api_tokens` module (SEC-06): API keys
+ * are coarse and GLOBAL, so "has any module at all" let a scan-/links-only role
+ * mint a key that reaches the whole DUSA roster. This fails CLOSED — until an
+ * admin grants `api_tokens`, nobody but admins can mint. `trigger`/`ingest` are
+ * unchanged (they were already narrower than "any module").
  */
 export function allowedScopesFor(user: CurrentUser): ApiScope[] {
   const admin = isAdmin(user.modules);
+  const canMint = admin || canAccess(user.modules, "api_tokens");
   const out: ApiScope[] = [];
-  if (admin || user.modules.length > 0) out.push("read");
-  if (admin || user.writeModules.length > 0) out.push("write");
+  if (canMint) out.push("read");
+  if (canMint) out.push("write");
   if (admin || canWrite(user.modules, user.writeModules, "meetings")) out.push("trigger");
   if (admin) out.push("ingest");
   return out;

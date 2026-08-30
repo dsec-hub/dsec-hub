@@ -41,7 +41,7 @@ function eq(name: string, a: unknown, b: unknown) {
 eq(
   "MODULE_KEYS: the full gateable module set",
   [...MODULE_KEYS].sort(),
-  ["admin","documents","events","finance","links","meetings","members","partners","people","projects","scan","sponsors","tasks"],
+  ["admin","api_tokens","documents","events","finance","links","meetings","members","partners","people","projects","scan","sponsors","tasks"],
 );
 
 // --- canAccess: module read, admin = superuser ---
