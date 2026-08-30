@@ -2,7 +2,7 @@ import { csvResponse, toCSV } from "@/lib/csv";
 import { getCurrentUser } from "@/lib/dal";
 import { canAccess } from "@/lib/rbac";
 import { logUsage } from "@/lib/usage";
-import { getCurrentTransactions, getMembers } from "@/lib/workspace-queries";
+import { getCurrentTransactions, getMembers, type MemberRow } from "@/lib/workspace-queries";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -16,7 +16,17 @@ export async function GET(
 
   if (kind === "members") {
     if (!canAccess(user.modules, "members")) return new Response("Forbidden", { status: 403 });
-    const rows = await getMembers({ currentOnly: true });
+    // Page through the whole roster so the export is never silently truncated.
+    // The hard stop guards against an accidental infinite loop over the DB —
+    // no student club has 50k members, so throwing there surfaces a real bug.
+    const PAGE = 500;
+    const rows: MemberRow[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      if (offset > 50_000) throw new Error("members export exceeded 50k rows");
+      const page = await getMembers({ currentOnly: true, limit: PAGE, offset });
+      rows.push(...page);
+      if (page.length < PAGE) break;
+    }
     const csv = toCSV(
       ["Full Name", "Student ID", "Email", "Campus", "Faculty", "Membership Type", "DUSA Member", "First Subscription", "Last Paid", "End Date"],
       rows.map((m) => [
