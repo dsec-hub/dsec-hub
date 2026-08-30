@@ -1,0 +1,21 @@
+# Code owners for dsec-hub (committee dashboard; reads/writes the shared DB).
+# Last match wins, so the owner-only overrides sit *after* the default.
+#
+# @dsec-hub/dsec-leads  — trusted reviewers (default)
+# @Clupai8o0            — maintainer; the only reviewer for anything touching
+#                         the database shape.
+
+# Default: any lead may review.
+*                               @dsec-hub/dsec-leads
+
+# dsec-hub does NOT own the schema — dsec-api does. These files must stay an
+# introspection of the real schema (Drizzle `introspect`, never `push`), and
+# the app-owned table scripts must stay idempotent. Maintainer-only.
+/src/db/schema.ts               @Clupai8o0
+/src/db/workspace-schema.ts     @Clupai8o0
+/drizzle.config.ts              @Clupai8o0
+/scripts/                       @Clupai8o0
+
+# Governance and CI config.
+/.github/                       @Clupai8o0
+/CONTRIBUTING.md                @Clupai8o0
