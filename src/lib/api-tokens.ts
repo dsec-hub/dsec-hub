@@ -86,6 +86,10 @@ export type ApiTokenRow = {
   scopes: string[];
   createdAt: string;
   lastUsedAt: string | null;
+  expiresAt: string | null;
+  /** Derived here (not in render) to keep the Server Component pure. */
+  expired: boolean;
+  expiringSoon: boolean;
   revoked: boolean;
 };
 
@@ -99,15 +103,24 @@ export async function listTokensForUser(userId: number): Promise<ApiTokenRow[]> 
       scopes: apiKey.scopes,
       createdAt: apiKey.createdAt,
       lastUsedAt: apiKey.lastUsedAt,
+      expiresAt: apiKey.expiresAt,
       revoked: apiKey.revoked,
     })
     .from(apiKey)
     .where(eq(apiKey.createdBy, ownerLabel(userId)))
     .orderBy(desc(apiKey.createdAt));
-  return rows.map((r) => ({
-    ...r,
-    scopes: Array.isArray(r.scopes) ? (r.scopes as string[]) : [],
-  }));
+  const now = Date.now();
+  const soonMs = 14 * 24 * 60 * 60 * 1000;
+  return rows.map((r) => {
+    const expiresMs = r.expiresAt ? new Date(r.expiresAt).getTime() : null;
+    const expired = expiresMs != null && expiresMs <= now;
+    return {
+      ...r,
+      scopes: Array.isArray(r.scopes) ? (r.scopes as string[]) : [],
+      expired,
+      expiringSoon: expiresMs != null && !expired && expiresMs - now < soonMs,
+    };
+  });
 }
 
 export type MintResult =
