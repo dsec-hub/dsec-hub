@@ -24,6 +24,7 @@ import {
   rejectAccount,
   resolveRequest,
 } from "./actions";
+import { LinkRosterMember } from "./link-roster-member";
 
 const ACCOUNT_LIMIT = 500;
 
@@ -89,6 +90,7 @@ export default async function MemberSupportPage() {
         manualOverride: portalAccount.manualOverride,
         overrideBy: portalAccount.overrideBy,
         createdAt: portalAccount.createdAt,
+        memberId: portalAccount.memberId,
         memberName: members.fullName,
         memberEndDate: members.endDate,
       })
@@ -198,8 +200,16 @@ export default async function MemberSupportPage() {
           <EmptyState>No one has signed in to the member portal yet.</EmptyState>
         ) : (
           <ul className="divide-y divide-border">
-            {accounts.map((a) => (
-              <li key={a.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+            {accounts.map((a) => {
+              // A manually-approved (or otherwise verified) account with no roster
+              // link has no membership card — dsec-api keys the code/QR to
+              // member_id, which only the automatic match ever set. Flag it so the
+              // committee links it rather than leaving a silent dead end
+              // (NEW-APPDEEP-01).
+              const needsRosterLink =
+                a.memberId == null && (a.manualOverride === "approved" || a.status === "verified");
+              return (
+              <li key={a.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 truncate text-sm font-medium">
                     {a.name ? `${a.name} · ${a.email}` : a.email}
@@ -209,6 +219,7 @@ export default async function MemberSupportPage() {
                         override: {a.manualOverride}
                       </Badge>
                     )}
+                    {needsRosterLink && <Badge variant="warning">needs roster link</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted">
                     {a.provider ? `${a.provider} · ` : ""}
@@ -219,7 +230,8 @@ export default async function MemberSupportPage() {
                     {` · ${staleness(a.lastCheckAt)}`}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+                  {needsRosterLink && <LinkRosterMember accountId={a.id} />}
                   {a.manualOverride ? (
                     <form action={clearOverride.bind(null, a.id)}>
                       <button className={buttonGhost}>Clear override</button>
@@ -236,7 +248,8 @@ export default async function MemberSupportPage() {
                   )}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </SectionCard>
