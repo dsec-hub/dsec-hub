@@ -177,10 +177,16 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** Require access to a specific module; bounce to the overview otherwise. */
+/**
+ * Require access to a specific module. This is now the SINGLE authority for
+ * per-module routing (NEW-HUBAUTHZ-01): it re-reads the effective module set
+ * (role ∪ per-user extras) on every page load, so a per-user extra grant works
+ * without re-login and a revoke takes effect on the next request. Bounces to
+ * the access-denied page, which names the module from `?from=`.
+ */
 export async function requireModule(key: ModuleKey): Promise<CurrentUser> {
   const user = await requireUser();
-  if (!canAccess(user.modules, key)) redirect("/dashboard");
+  if (!canAccess(user.modules, key)) redirect(`/dashboard/access-denied?from=${key}`);
   return user;
 }
 

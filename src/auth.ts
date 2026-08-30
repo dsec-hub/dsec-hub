@@ -62,8 +62,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name ?? user.email,
           role: user.roleName ?? user.role,
           roleId: user.roleId ?? undefined,
-          // Snapshot of module access, carried in the JWT for the proxy's coarse
-          // route gate. Authoritative checks re-read the DB (see lib/dal.ts).
+          // Login-time snapshot of module access, carried in the JWT for
+          // DISPLAY only (session.user.modules). It is NOT an authorization
+          // input for routing — the route gate no longer reads it, and it can't
+          // see per-user extra grants or a later role change. Authoritative
+          // checks re-read the effective set from the DB (lib/dal.ts,
+          // requireModule) on every page/Server Action (NEW-HUBAUTHZ-01).
           modules: Array.isArray(user.modules) ? user.modules : [],
         };
       },
