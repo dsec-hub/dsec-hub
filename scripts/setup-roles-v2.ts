@@ -24,10 +24,16 @@
  */
 import { config } from "dotenv";
 
+import { MODULE_KEYS } from "../src/lib/rbac";
+
 config({ path: ".env.local" });
 
-const ALL = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents", "links", "admin"];
-const APP = ["events", "people", "sponsors", "partners", "finance", "tasks", "projects", "members", "meetings", "documents", "links"];
+// Derived from the single source of truth in src/lib/rbac.ts — never hand-edit.
+// `admin` is the superuser flag; APP is every other (operational) module.
+// `api_tokens` is a capability gate, not an operational module (SEC-06): it is
+// granted explicitly in the role editor, never seeded onto Exec/Auditor.
+const ALL = MODULE_KEYS.filter((k) => k !== "api_tokens");
+const APP = MODULE_KEYS.filter((k) => k !== "admin" && k !== "api_tokens");
 
 type ViewConfig = { version: 1; sections: Record<string, boolean>; landingPath?: string; defaultTaskView?: string };
 const sx = (...ids: string[]): Record<string, boolean> => Object.fromEntries(ids.map((id) => [id, true]));

@@ -9,6 +9,10 @@
  * Admins are superusers (they see every module implicitly), so they need no row.
  * Additive + idempotent — re-running never duplicates the grant.
  *
+ * HISTORICAL: a one-time grant already applied to production. New modules no
+ * longer need a script like this — the setup scripts derive their module list
+ * from `src/lib/rbac.ts` (MODULE_KEYS), the single source of truth.
+ *
  * NOTE: dsec-api owns the core schema via Alembic; this RBAC grant is app-owned
  * and applied here by hand (never via `alembic --autogenerate`).
  */

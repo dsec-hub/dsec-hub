@@ -36,7 +36,7 @@ function parseRole(fd: FormData) {
  * be pointed at a module it lacks (falls back to /dashboard). Section toggles
  * for inaccessible modules submit nothing → stored false. Never widens access.
  */
-function parseViewConfig(fd: FormData, modules: string[]): ViewConfig {
+function parseViewConfig(fd: FormData, modules: string[], existing?: ViewConfig | null): ViewConfig {
   const sections: Record<string, boolean> = {};
   for (const s of CANONICAL_SECTIONS) {
     sections[s.id] = str(fd, `viewConfig:section:${s.id}`) === "on";
@@ -45,7 +45,20 @@ function parseViewConfig(fd: FormData, modules: string[]): ViewConfig {
   const landingPath = isValidLandingPath(modules, rawLanding) ? rawLanding : "/dashboard";
   const dv = str(fd, "viewConfig:defaultView");
   const defaultTaskView = isBuiltInViewKey(dv) ? dv : "my-work";
-  return { version: 1, sections, landingPath, defaultTaskView };
+  // Committee visibility IS editable (a <select>, so it always submits a value);
+  // fail closed to "own" for anything but an explicit "all".
+  const rawScope = str(fd, "viewConfig:committeeScope");
+  const committeeScope = rawScope === "all" ? "all" : "own";
+  return {
+    version: 1,
+    sections,
+    landingPath,
+    defaultTaskView,
+    committeeScope,
+    // Not editable in this form — carry the stored value through instead of
+    // dropping it (see normalizeViewConfig's fallback).
+    ...(existing?.navOrder ? { navOrder: existing.navOrder } : {}),
+  };
 }
 
 async function nameTaken(name: string, exceptId?: number): Promise<boolean> {
@@ -110,7 +123,7 @@ export async function updateRole(
       description: values.description,
       modules: finalModules,
       writeModules: role.isSystem ? role.writeModules : values.writeModules,
-      viewConfig: parseViewConfig(fd, finalModules),
+      viewConfig: parseViewConfig(fd, finalModules, role.viewConfig),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(appRole.id, id));

@@ -12,22 +12,17 @@
  */
 import { config } from "dotenv";
 
+import { MODULE_KEYS } from "../src/lib/rbac";
+
 config({ path: ".env.local" });
 
-// Module keys must mirror src/lib/rbac.ts. Keep this list in sync when new
-// modules are added there, or non-admin roles can never be granted them.
-const APP_MODULES = [
-  "events",
-  "people",
-  "sponsors",
-  "finance",
-  "tasks",
-  "projects",
-  "members",
-  "meetings",
-  "documents",
-];
-const ALL_MODULES = [...APP_MODULES, "admin"];
+// Derived from the single source of truth in src/lib/rbac.ts — never hand-edit.
+// `admin` is the superuser flag and the admin panel; APP_MODULES is every
+// operational module. `api_tokens` is a capability gate, not an operational
+// module (SEC-06): it is granted explicitly in the role editor and must never
+// be seeded onto Exec/Auditor — admins mint keys via the isAdmin short-circuit.
+const APP_MODULES = MODULE_KEYS.filter((k) => k !== "admin" && k !== "api_tokens");
+const ALL_MODULES = MODULE_KEYS.filter((k) => k !== "api_tokens");
 
 // `modules` = sections a role can SEE; `writeModules` = the subset it can also
 // EDIT (write ⊆ read). "admin" is a superuser for both.

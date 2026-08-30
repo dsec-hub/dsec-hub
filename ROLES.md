@@ -5,9 +5,12 @@ and invites from **/admin**; everyone else sees only the modules their role gran
 
 ## Concepts
 
-- **Modules** — gateable areas: `events`, `people`, `sponsors`, `finance`, `tasks`,
-  `projects`, `members`, `meetings`, `documents`, `admin`. The **Dashboard** (`/`,
-  which redirects to `/dashboard`) is always available to any active user.
+- **Modules** — gateable areas, defined authoritatively by `MODULES` in
+  [`src/lib/rbac.ts`](./src/lib/rbac.ts): `events`, `people`, `sponsors`,
+  `partners`, `finance`, `tasks`, `projects`, `members`, `meetings`, `documents`,
+  `links`, `scan`, and `admin`. The **Dashboard** (`/`, which redirects to
+  `/dashboard`) is always available to any active user, as are `/media` and
+  `/settings` — they are deliberately ungated.
 - **Read vs write** — each module is granted as **View** (`modules`) or **Edit**
   (`writeModules` ⊆ `modules`); write always implies read.
 - **Role** — a named set of modules (stored in `app_role`). A role that includes
