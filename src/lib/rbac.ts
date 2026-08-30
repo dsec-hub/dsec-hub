@@ -217,14 +217,24 @@ export function canManageRelatedTasks(
  * write any task; otherwise a user may write only the tasks ASSIGNED to them
  * (the "Member edits their own tasks" rule). Pure — used both to gate the UI
  * and as the authoritative check in task Server Actions. */
+/** canWriteTask when the module-tier answer is already known — the task board
+ * passes `fullWrite` down as a prop rather than the raw module arrays. Keeps
+ * ONE definition of the ownership half of the rule. */
+export function canWriteTaskWith(
+  fullWrite: boolean,
+  personId: number | null | undefined,
+  assigneeId: number | null | undefined,
+): boolean {
+  return fullWrite || isOwner(personId, assigneeId);
+}
+
 export function canWriteTask(
   modules: readonly string[] | null | undefined,
   writeModules: readonly string[] | null | undefined,
   personId: number | null | undefined,
   assigneeId: number | null | undefined,
 ): boolean {
-  if (canWrite(modules, writeModules, "tasks")) return true;
-  return isOwner(personId, assigneeId);
+  return canWriteTaskWith(canWrite(modules, writeModules, "tasks"), personId, assigneeId);
 }
 
 /** The task fields that are MANAGEMENT actions: only a tasks-writer may set

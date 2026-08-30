@@ -7,6 +7,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { Icons } from "@/components/icons";
 import { Badge, EmptyState, buttonGhost } from "@/components/ui";
 import { cn } from "@/lib/format";
+import { canWriteTaskWith } from "@/lib/rbac";
 import { showUndoToast } from "@/lib/use-undo-toast";
 import { priorityVariant } from "@/lib/workspace-options";
 import type { TaskGroup } from "@/lib/task-view-helpers";
@@ -72,10 +73,6 @@ const PRIORITY_DOT: Record<string, string> = {
   Medium: "bg-accent",
   Low: "bg-muted/50",
 };
-
-function canWriteRow(t: TaskRow, fullWrite: boolean, personId: number | null): boolean {
-  return fullWrite || (personId != null && t.assigneeId === personId);
-}
 
 /** "✓ 2/5" subtask progress, shown only when a task has children. */
 function SubtaskChip({ t }: { t: TaskRow }) {
@@ -208,7 +205,7 @@ export function GroupedBoard({
           </div>
           <div className="flex min-h-16 flex-col gap-2">
             {col.tasks.map((t) => {
-              const draggable = reassignable && canWriteRow(t, fullWrite, personId);
+              const draggable = reassignable && canWriteTaskWith(fullWrite, personId, t.assigneeId);
               return (
                 <div
                   key={t.id}
@@ -354,7 +351,7 @@ export function GroupedList({
           )}
           <ul className="divide-y divide-border">
             {g.tasks.map((t) => {
-              const writable = canWriteRow(t, fullWrite, personId);
+              const writable = canWriteTaskWith(fullWrite, personId, t.assigneeId);
               return (
                 <li key={t.id} className="group flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">

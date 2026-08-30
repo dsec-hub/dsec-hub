@@ -6,7 +6,7 @@ import { Badge, EmptyState, PageHeader, SectionCard, buttonGhost } from "@/compo
 import { getCommitteeOptions } from "@/lib/committee-queries";
 import { requireModule } from "@/lib/dal";
 import { cn, formatDate } from "@/lib/format";
-import { canAccess, canWrite } from "@/lib/rbac";
+import { canAccess, canWrite, canWriteTask } from "@/lib/rbac";
 import { committeeScopeOf } from "@/lib/scope";
 import { docStatusVariant } from "@/lib/workspace-options";
 import {
@@ -30,7 +30,9 @@ export default async function EditTaskPage({
   params: Promise<{ id: string }>;
 }) {
   const me = await requireModule("tasks");
-  const writable = canWrite(me.modules, me.writeModules, "tasks");
+  // Module tier: gates the management actions (Archive / Delete). The per-task
+  // edit permission (`canEdit`) is computed below, once the task is loaded.
+  const canManage = canWrite(me.modules, me.writeModules, "tasks");
   const { id } = await params;
   const taskId = Number(id);
   if (Number.isNaN(taskId)) notFound();
@@ -46,6 +48,12 @@ export default async function EditTaskPage({
     getTaskOwnerIds(taskId),
   ]);
   if (!task) notFound();
+
+  // Per-task edit permission: a member assigned this task may edit it even
+  // without the tasks write-module (the "edit your own work" rule). Computed
+  // after the task loads because it needs the assignee. updateTask clamps the
+  // management fields for such members (NEW-HUBAUTHZ-08).
+  const canEdit = canWriteTask(me.modules, me.writeModules, me.personId, task.assigneeId);
 
   // Docs attached to this task (document.related_task_id). Only shown to users
   // who can see the Docs module, and committee-scoped inside the query.
@@ -63,7 +71,7 @@ export default async function EditTaskPage({
           { label: task.title },
         ]}
         action={
-          writable ? (
+          canManage ? (
             <div className="flex items-center gap-2">
               <UndoButton action={archiveTask.bind(null, taskId)} redirectTo="/tasks" className={buttonGhost}>
                 Archive
@@ -85,14 +93,14 @@ export default async function EditTaskPage({
         committees={committees}
         coOwnerIds={coOwnerIds}
         redirectOnSuccess="/tasks"
-        canWrite={writable}
+        canWrite={canEdit}
       />
 
       {/* One-level subtasks: only top-level tasks get a checklist. A subtask
           shows a link back to its parent instead. */}
       <div className="mt-6">
         {task.parentTaskId == null ? (
-          <Subtasks parentId={taskId} subtasks={subtasks} canWrite={writable} />
+          <Subtasks parentId={taskId} subtasks={subtasks} canWrite={canEdit} />
         ) : (
           <p className="text-sm text-muted">
             This is a subtask of{" "}

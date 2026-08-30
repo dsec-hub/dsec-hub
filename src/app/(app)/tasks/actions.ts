@@ -299,9 +299,18 @@ export async function createSubtask(parentId: number, fd: FormData): Promise<voi
   revalidateTasks();
 }
 
-/** Tick / untick a subtask (sets status + completedAt). */
+/** Tick / untick a subtask (sets status + completedAt). Authorised against the
+ * PARENT task, not the child: a member who owns the parent (the "edit your own
+ * work" rule, enabled on the edit page by NEW-HUBAUTHZ-09) may tick its
+ * subtasks — including ones a full writer created unassigned — without being
+ * bounced to /dashboard. Falls back to the child if it has no parent. */
 export async function toggleSubtask(childId: number, done: boolean): Promise<void> {
-  const user = await assertTaskWrite(childId);
+  const [child] = await db
+    .select({ parentTaskId: tasks.parentTaskId })
+    .from(tasks)
+    .where(eq(tasks.id, childId))
+    .limit(1);
+  const user = await assertTaskWrite(child?.parentTaskId ?? childId);
   const now = new Date().toISOString();
   await db
     .update(tasks)

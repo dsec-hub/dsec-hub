@@ -11,6 +11,8 @@ import {
   canAccess,
   canManageRelatedTasks,
   canWrite,
+  canWriteTask,
+  canWriteTaskWith,
   clampMemberTask,
   isAdmin,
   isOwner,
@@ -103,6 +105,17 @@ eq("scopeFor: module → full", scopeFor(true, false), "full");
 eq("scopeFor: module + owns → full", scopeFor(true, true), "full");
 eq("scopeFor: no module + owns → owned", scopeFor(false, true), "owned");
 eq("scopeFor: no module, owns none → none", scopeFor(false, false), "none");
+
+// --- canWriteTaskWith / canWriteTask: one definition of the ownership rule (HUBAUTHZ-09) ---
+check("canWriteTaskWith: module writer writes any task", canWriteTaskWith(true, 5, 6) === true);
+check("canWriteTaskWith: owner may write own task", canWriteTaskWith(false, 5, 5) === true);
+check("canWriteTaskWith: non-owner denied", canWriteTaskWith(false, 5, 6) === false);
+check("canWriteTaskWith: no roster link owns nothing", canWriteTaskWith(false, null, null) === false);
+// canWriteTask delegates to canWriteTaskWith and still treats admin as a writer.
+check("canWriteTask: admin writes any task", canWriteTask(["admin"], [], 5, 6) === true);
+check("canWriteTask: tasks writer writes any task", canWriteTask(["tasks"], ["tasks"], 5, 6) === true);
+check("canWriteTask: member writes own task", canWriteTask(["tasks"], [], 5, 5) === true);
+check("canWriteTask: member denied other's task", canWriteTask(["tasks"], [], 5, 6) === false);
 
 // --- clampMemberTask: a non-writer member can't set management fields (HUBAUTHZ-08) ---
 const memberValues = {
