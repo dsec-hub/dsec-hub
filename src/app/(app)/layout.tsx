@@ -131,6 +131,15 @@ export default async function AppLayout({
   return (
     <>
       {themeCss ? <style>{themeCss}</style> : null}
+      {/* Skip link (WCAG 2.4.1): hidden until focused, jumps a keyboard user
+          past the ~24-stop sidebar to <main id="main">. In the (app) layout, not
+          the root layout, which also wraps /signin and /onboarding (no #main). */}
+      <a
+        href="#main"
+        className="absolute left-[-9999px] z-[200] rounded-md text-sm font-medium focus:left-4 focus:top-4 focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-foreground"
+      >
+        Skip to content
+      </a>
       <AppShell
         groups={groups}
         userName={name}
