@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
+import { ARCHIVE_ORDER } from "@/lib/archive";
 import { requireWrite, type CurrentUser } from "@/lib/dal";
 import { canWriteCommittee } from "@/lib/rbac";
 import { committeeScopeOf } from "@/lib/scope";
@@ -24,23 +25,14 @@ type LooseTable = any;
  * there rather than re-declaring them. Anything not in this set is rejected even
  * if it happens to be a valid undo key (e.g. user/role/committee).
  */
-const ARCHIVABLE = new Set<UndoKey>([
-  "event",
-  "task",
-  "board",
-  "project",
-  "meeting",
-  "document",
-  "person",
-  "partner",
-  "sponsor",
-  "finance",
-  "link",
-]);
+// Derived from the page's own section list (lib/archive.ts ARCHIVE_ORDER) so the
+// two can never disagree again — that drift is what left archived scan cards
+// stuck (the old hand-written list omitted "scan_target"). Anything not
+// archivable (user / role / committee) is still rejected.
+const ARCHIVABLE = new Set<UndoKey>(ARCHIVE_ORDER);
 
 function lookup(key: UndoKey) {
-  if (!ARCHIVABLE.has(key)) throw new Error("Not an archivable item.");
-  return REGISTRY[key];
+  return ARCHIVABLE.has(key) ? REGISTRY[key] : null;
 }
 
 /**
@@ -72,6 +64,7 @@ async function assertCommitteeWrite(
  * undo toast (the snapshot restores the prior row, re-archiving it). */
 export async function restoreItem(key: UndoKey, id: number): Promise<ActionResult> {
   const reg = lookup(key);
+  if (!reg) return { error: "That item can't be restored or deleted from the Archive." };
   const user = await requireWrite(reg.module);
   const table = reg.table as LooseTable;
   await assertCommitteeWrite(user, key, table, id);
@@ -89,6 +82,7 @@ export async function restoreItem(key: UndoKey, id: number): Promise<ActionResul
  * the row untouched and reports a friendly error instead of crashing. */
 export async function deleteItem(key: UndoKey, id: number): Promise<ActionResult> {
   const reg = lookup(key);
+  if (!reg) return { error: "That item can't be restored or deleted from the Archive." };
   const user = await requireWrite(reg.module);
   const table = reg.table as LooseTable;
   await assertCommitteeWrite(user, key, table, id);

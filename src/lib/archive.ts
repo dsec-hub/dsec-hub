@@ -78,8 +78,9 @@ export const ARCHIVE_META: Record<ArchiveKey, Meta> = {
   scan_target: { module: "scan", label: "Scan cards", icon: "camera" },
 };
 
-/** Section order on the Archive page. */
-const ARCHIVE_ORDER: ArchiveKey[] = [
+/** Section order on the Archive page. Also the allow-list the Archive Server
+ * Actions check against — keep exactly one copy of this list. */
+export const ARCHIVE_ORDER: ArchiveKey[] = [
   "event",
   "task",
   "board",
