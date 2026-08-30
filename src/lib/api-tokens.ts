@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { apiKey } from "@/db/schema";
@@ -157,17 +157,41 @@ export async function mintToken(
   return { ok: true, rawKey: body.raw_key, prefix: body.prefix, scopes: body.scopes };
 }
 
-/** Revoke one of the user's own tokens (ownership-checked). Returns false if the
- * token isn't theirs or doesn't exist. */
-export async function revokeTokenForUser(userId: number, keyId: number): Promise<boolean> {
-  const [row] = await db
-    .select({ id: apiKey.id })
-    .from(apiKey)
-    .where(and(eq(apiKey.id, keyId), eq(apiKey.createdBy, ownerLabel(userId))))
-    .limit(1);
-  if (!row) return false;
-  await db.update(apiKey).set({ revoked: true }).where(eq(apiKey.id, keyId));
-  return true;
+/**
+ * Revoke one of the user's own tokens (ownership-checked). Returns false if the
+ * token isn't theirs, doesn't exist, or the API couldn't be reached.
+ *
+ * SEC-07d: this used to write `api_key.revoked` directly in Neon, which bypassed
+ * the parent->child cascade dsec-api performs — revoking a parent key left its
+ * child keys alive. It now goes through `POST /admin/keys/revoke-for-owner`, which
+ * cascades and re-checks ownership against the `appuser:<id>` owner label. The API
+ * (the schema owner) is the sole revoke authority, matching how minting already
+ * works.
+ */
+export type RevokeResult = { ok: true } | { ok: false };
+
+export async function revokeTokenForUser(userId: number, keyId: number): Promise<RevokeResult> {
+  const env = apiEnv();
+  // No API configured -> we can't revoke safely. A real failure the caller must
+  // surface, NOT a benign "already gone".
+  if (!env) return { ok: false };
+  let res: Response;
+  try {
+    res = await fetch(`${env.base}/admin/keys/revoke-for-owner`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${env.key}` },
+      body: JSON.stringify({ key_id: keyId, owner: ownerLabel(userId) }),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false }; // API unreachable — never report false success
+  }
+  // Any non-2xx is a real failure to surface. In particular a 404 is NOT benign
+  // here: revocation is soft (an already-revoked key still returns 200), and the
+  // endpoint accepts the hub's service key for any of a user's own tokens
+  // regardless of key age or lineage — so a token this page just listed should
+  // always revoke. A 404 means something is inconsistent, not "already gone".
+  return res.ok ? { ok: true } : { ok: false };
 }
 
 /** The MCP server URL a client connects to (derived from the API base). */

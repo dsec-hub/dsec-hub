@@ -54,10 +54,26 @@ export async function createApiToken(
   return { ok: true, rawKey: result.rawKey, prefix: result.prefix, scopes: result.scopes };
 }
 
-/** Revoke one of the user's own tokens. Bound to its id at the call site. */
-export async function revokeApiToken(keyId: number): Promise<void> {
+export type RevokeTokenState = { error?: string } | undefined;
+
+/**
+ * Revoke one of the user's own tokens. `keyId` is bound at the call site; the
+ * remaining `(prev, formData)` shape is the `useActionState` contract so the
+ * button can surface a failure. A revoke that quietly fails would leave a live
+ * credential the user believes is gone, so any failure returns an `error` the
+ * client toasts and the token stays listed (still active) so they can retry.
+ */
+export async function revokeApiToken(
+  keyId: number,
+  _prev: RevokeTokenState,
+  _fd: FormData,
+): Promise<RevokeTokenState> {
   const user = await requireUser();
-  const ok = await revokeTokenForUser(user.id, keyId);
-  if (ok) await logMutation(user, "update", "api_token", keyId, "revoked");
+  const result = await revokeTokenForUser(user.id, keyId);
+  if (!result.ok) {
+    return { error: "Couldn't revoke the token. Please try again; if it persists, tell an admin." };
+  }
+  await logMutation(user, "update", "api_token", keyId, "revoked");
   revalidatePath("/settings/api");
+  return undefined;
 }
