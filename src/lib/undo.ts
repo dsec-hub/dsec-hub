@@ -124,6 +124,21 @@ const COLUMN_DENYLIST: Partial<Record<UndoKey, Record<string, DeniedColumn>>> = 
   meeting: { agendaShareToken: {} },
 };
 
+// Restore-time invariants: coerce a replayed snapshot so it still satisfies a DB
+// CHECK that was added AFTER the token was minted. A `project` delete/update token
+// captured before the review-workflow migration carries isPublic=true but no
+// reviewState; replaying it verbatim would violate ck_project_public_requires_approved
+// and fail the restore. Publishing is itself the approval, so a restored public
+// project is approved. Post-migration tokens already carry an approved reviewState
+// (a public+draft snapshot cannot exist under the CHECK), so this is a no-op for them.
+const RESTORE_INVARIANTS: Partial<Record<UndoKey, (values: Record<string, unknown>) => void>> = {
+  project: (values) => {
+    if (values.isPublic === true && values.reviewState !== "approved") {
+      values.reviewState = "approved";
+    }
+  },
+};
+
 async function readRow(key: UndoKey, id: number): Promise<Record<string, unknown> | undefined> {
   const { table } = REGISTRY[key];
   const [row] = await db
@@ -195,9 +210,11 @@ export async function applyUndo(token: UndoToken): Promise<void> {
     await db.delete(table as LooseTable).where(eq(idColumn(table), token.id));
   } else if (token.op === "update") {
     // reverse an update/archive → restore the prior column values
+    const values = pickColumns(table, token.prev);
+    RESTORE_INVARIANTS[token.key]?.(values);
     await db
       .update(table as LooseTable)
-      .set(pickColumns(table, token.prev))
+      .set(values)
       .where(eq(idColumn(table), token.id));
   } else {
     // reverse a hard delete → re-insert the captured row (same id). A secret
@@ -214,6 +231,7 @@ export async function applyUndo(token: UndoToken): Promise<void> {
         }
       }
     }
+    RESTORE_INVARIANTS[token.key]?.(values);
     await db.insert(table as LooseTable).values(values);
   }
 
